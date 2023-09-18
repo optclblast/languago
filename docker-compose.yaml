@@ -1,0 +1,12 @@
+version: '3'
+
+services:
+  web:
+    build:
+      context: ./web
+      target: languago-web
+    
+  back:
+    build:
+      context: ./back
+      target: languago-back
