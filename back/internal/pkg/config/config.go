@@ -2,11 +2,10 @@ package config
 
 import (
 	"encoding/json"
+	"languago/internal/pkg/logger"
+	"languago/internal/pkg/mock"
 	"languago/internal/pkg/repository"
-	"log"
 	"os"
-
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -98,23 +97,18 @@ func NewConfig() AbstractConfig {
 
 	switch rawCfg.Logger.Logger {
 	case "logrus":
-		cfg.LoggerCfg.Logger = &LogrusWrapper{
-			dbgMode: rawCfg.Logger.DebugMode,
-			log:     logrus.NewEntry(logrus.New()),
-		}
+		cfg.LoggerCfg.Logger = logger.NewLogrusWrapper(rawCfg.Logger.DebugMode)
 	case "slog":
 		// TODO
-		// cfg.LoggerCfg.Logger = slog.NewLogLogger()
+		//cfg.LoggerCfg.Logger = logger.NewSLogLogger(rawCfg.Logger.DebugMode)
+		mock.ImplementMePanic()
 	default:
-		cfg.LoggerCfg.Logger = &DefaultLogger{
-			dbgMode: rawCfg.Logger.DebugMode,
-			log:     log.Default(),
-		}
+		cfg.LoggerCfg.Logger = logger.NewDefaultLogger(rawCfg.Logger.DebugMode)
 	}
-
 	cfg.DatabaseCfg = (*DatabaseConfig)(&rawCfg.Database)
 	cfg.NodeCfg = (*NodeConfig)(&rawCfg.Node)
 
+	return &cfg
 }
 
 func (c *Config) GetDatabaseConfig() AbstractDatabaseConfig {
@@ -139,10 +133,12 @@ func (c *DatabaseConfig) GetCredentials() repository.DBCredentials {
 }
 
 func (c *NodeConfig) GetHTTPAddress() string {
+	mock.ImplementMePanic()
 	return "localhost"
 }
 
 func (c *NodeConfig) GetRPCAddress() string {
+	mock.ImplementMePanic()
 	return "0.0.0.0"
 }
 

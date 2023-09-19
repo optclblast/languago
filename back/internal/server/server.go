@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"languago/internal/pkg/logger"
 	"languago/internal/server/api"
 	"net/http"
@@ -37,6 +36,7 @@ func (s *Service) Run() {
 	s.API.Init()
 	err := http.ListenAndServe("localhost:3300", s.API)
 	if err != nil {
-		s.log.Err(fmt.Sprintf("fatal serving error: %s", err.Error()))
+		// Err??
+		//s.log.Err(fmt.Sprintf("fatal serving error: %s", err.Error()))
 	}
 }
