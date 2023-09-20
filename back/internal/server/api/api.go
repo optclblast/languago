@@ -1,9 +1,11 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
-	"languago/logger"
+	"languago/internal/pkg/logger"
+	"languago/internal/pkg/models/requests/rest"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -52,13 +54,19 @@ func (a *API) randomWord() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resp, err := http.Get(randomwordapi)
 		if err != nil {
-			a.log.Err(fmt.Sprintf("error getting response from %s: %s", randomwordapi, err.Error()))
+			a.log.Warn(fmt.Sprintf("error getting response from %s: %s", randomwordapi, err.Error()))
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("error getting random word"))
 			return
 		}
 		defer resp.Body.Close()
 		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			a.log.Warn(fmt.Sprintf("error reading response body from %s: %s", randomwordapi, err.Error()))
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("error getting random word"))
+			return
+		}
 		a.log.Debug(string(body))
 		w.WriteHeader(http.StatusOK)
 	}
@@ -66,6 +74,14 @@ func (a *API) randomWord() http.HandlerFunc {
 
 func (a *API) newFlashcard() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		
+		var req rest.NewFlashcardRequest
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			err = fmt.Errorf("error reading request body: %w", err)
+			a.log.Warn(err)
+			a.response(w, err)
+		}
+		json.Unmarshal(body, req)
+		// todo
 	}
 }

@@ -1,10 +1,22 @@
 package main
 
 import (
+	"languago/internal/pkg/config"
 	"languago/internal/server"
 )
 
 func main() {
-	s := server.NewService()
-	s.Run()
+	cfg := config.NewConfig()
+
+	svs := make(map[string]server.Service)
+	svs["flashcard_service"] = server.NewService()
+	node, err := server.NewNode(&server.NewNodeParams{
+		Services: svs,
+		Logger:   cfg.GetLoggerConfig().GetLogger(),
+	})
+	if err != nil {
+		panic("ERROR!!!")
+	}
+
+	node.Run()
 }
