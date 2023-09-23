@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"languago/internal/pkg/config"
 	"languago/internal/pkg/logger"
 	"languago/internal/pkg/models/requests/rest"
 	"net/http"
@@ -19,10 +20,10 @@ type (
 	}
 )
 
-func NewAPI() *API {
+func NewAPI(cfg config.AbstractLoggerConfig) *API {
 	return &API{
 		Router: mux.NewRouter(),
-		log:    logger.ProvideLogger(nil),
+		log:    logger.ProvideLogger(cfg),
 	}
 }
 func (api *API) routes() {
@@ -83,5 +84,11 @@ func (a *API) newFlashcard() http.HandlerFunc {
 		}
 		json.Unmarshal(body, req)
 		// todo
+	}
+}
+
+func (a *API) getFlashcard() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
 	}
 }

@@ -18,7 +18,7 @@ type (
 	}
 
 	Service interface {
-		StartService() error
+		StartService(e chan error)
 		StopService() error
 		Ping() bool
 	}
@@ -28,6 +28,8 @@ type (
 		config    config.AbstractNodeConfig
 		Logger    logger.Logger
 		Services  map[string]Service
+		ErrorCh   chan error
+		StopCh    chan struct{}
 		StopFuncs []StopFunc
 	}
 
@@ -57,14 +59,12 @@ func NewNode(args *NewNodeParams) (Node, error) {
 }
 
 func (n *node) Run() {
+	go n.errorHandler()
 	for name, s := range n.Services {
-		err := s.StartService()
-		if err != nil {
-			n.Logger.Warn(fmt.Sprintf("error starting service: %s. error: %s", name, err.Error()))
-			continue
-		}
-		n.Logger.Info(fmt.Sprintf("service %s successfully started"))
+		s.StartService(n.ErrorCh)
+		n.Logger.Info(fmt.Sprintf("service %s successfully started", name))
 	}
+	<-n.StopCh
 }
 
 func (n *node) Stop() {
@@ -90,4 +90,10 @@ func (n *node) Healthcheck() []error {
 
 func (n *node) SetConfig(cfg config.AbstractNodeConfig) {
 	n.config = cfg
+}
+
+func (n *node) errorHandler() {
+	for {
+		n.Logger.Warn("error: ", <-n.ErrorCh)
+	}
 }

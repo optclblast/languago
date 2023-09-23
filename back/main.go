@@ -6,10 +6,10 @@ import (
 )
 
 func main() {
-	cfg := config.NewConfig()
+	cfg := config.InitialConfiguration()
 
 	svs := make(map[string]server.Service)
-	svs["flashcard_service"] = server.NewService()
+	svs["flashcard_service"] = server.NewService(cfg)
 	node, err := server.NewNode(&server.NewNodeParams{
 		Services: svs,
 		Logger:   cfg.GetLoggerConfig().GetLogger(),

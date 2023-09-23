@@ -2,7 +2,9 @@ package server
 
 import (
 	"fmt"
+	"languago/internal/pkg/config"
 	"languago/internal/pkg/logger"
+	"languago/internal/pkg/repository"
 	"languago/internal/server/api"
 	"net/http"
 )
@@ -10,7 +12,7 @@ import (
 type (
 	flashcardService struct {
 		API     *api.API
-		Storage struct{} //TODO
+		Storage repository.DatabaseInteractor //TODO
 		log     logger.Logger
 		Config  ServerConfigPresenter
 	}
@@ -25,23 +27,17 @@ type (
 	ConfigUpdateParams map[string]interface{}
 )
 
-func NewService() Service {
+func NewService(cfg config.AbstractConfig) Service {
 	return &flashcardService{
-		API: api.NewAPI(),
-		log: logger.ProvideLogger(nil),
+		API: api.NewAPI(cfg.GetLoggerConfig()),
+		log: logger.ProvideLogger(cfg.GetLoggerConfig()),
 	}
 }
 
-func (s *flashcardService) StartService() error {
+func (s *flashcardService) StartService(e chan error) {
 	s.log.Info("Starting server")
 	s.API.Init()
-	err := http.ListenAndServe("localhost:3300", s.API)
-	if err != nil {
-		// Err??
-		//s.log.Err(fmt.Sprintf("fatal serving error: %s", err.Error()))
-		return fmt.Errorf("error service runtime error: %w", err)
-	}
-	return nil
+	go s.listen(e)
 }
 
 func (s *flashcardService) StopService() error {
@@ -53,4 +49,11 @@ func (s *flashcardService) StopService() error {
 func (s *flashcardService) Ping() bool {
 	// TODO
 	return true
+}
+
+func (s *flashcardService) listen(e chan error) {
+	err := http.ListenAndServe("localhost:3300", s.API)
+	if err != nil {
+		e <- fmt.Errorf("error service runtime error: %w", err)
+	}
 }

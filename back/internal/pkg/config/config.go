@@ -1,43 +1,16 @@
 package config
 
 import (
-	"encoding/json"
-	"fmt"
+	"bytes"
 	"languago/internal/pkg/logger"
 	"languago/internal/pkg/mock"
 	"languago/internal/pkg/repository"
 	"os"
-)
 
-var (
-	CONFIG_DIR string = "./general.json"
+	"github.com/spf13/viper"
 )
 
 type (
-	cfgFileStruct struct {
-		Node struct {
-			HTTPAddress string `json:"http_address"`
-			HTTPPort    string `json:"http_port"`
-			RPCAddress  string `json:"rpc_address"`
-			RPCPort     string `json:"rpc_port"`
-		} `json:"node"`
-		Database struct {
-			DatabaseAddress string `json:"db_address"`
-			DatabaseDriver  string `json:"db_driver"`
-			DatabaseUser    string `json:"db_user"`
-			DatabaseSecret  string `json:"db_secret"`
-		} `json:"database"`
-		Logger struct {
-			Logger    string `json:"logger"`
-			DebugMode bool   `json:"debug"`
-			// LogrusParams struct {
-			// 	// TODO
-			// } `json:"logrus_params,omitempty"`
-			// SlogParams struct {
-			// } `json:"slog_params,omitempty"`
-		} `json:"logger"`
-	}
-
 	AbstractConfig interface {
 		GetDatabaseConfig() AbstractDatabaseConfig
 		GetNodeConfig() AbstractNodeConfig
@@ -51,11 +24,11 @@ type (
 	AbstractNodeConfig interface {
 		GetHTTPAddress() string
 		GetRPCAddress() string
-		SetLogger(l Logger)
+		SetLogger(l logger.Logger)
 	}
 
 	AbstractLoggerConfig interface {
-		GetLogger() Logger
+		GetLogger() logger.Logger
 	}
 
 	Config struct {
@@ -72,7 +45,7 @@ type (
 	}
 
 	NodeConfig struct {
-		log         Logger
+		Logger      logger.Logger
 		HTTPAddress string
 		HTTPPort    string
 		RPCAddress  string
@@ -80,47 +53,52 @@ type (
 	}
 
 	LoggerConfig struct {
-		Logger Logger
+		Logger logger.Logger
 	}
 )
 
-func NewConfig() AbstractConfig {
-	rawCfg := &cfgFileStruct{}
-	var cfg Config
+func InitialConfiguration() AbstractConfig {
+	var config Config = Config{
+		DatabaseCfg: &DatabaseConfig{},
+		NodeCfg:     &NodeConfig{},
+		LoggerCfg:   &LoggerConfig{},
+	}
+	CONFIG_DIR := os.Getenv("LANGUAGO_CONFIG_DIR")
+	if CONFIG_DIR == "" {
+		panic("LANGUAGO_CONFIG_DIR env variable required!")
+	}
 
-	data, err := os.ReadFile(CONFIG_DIR)
+	viper.SetConfigType("yaml")
+	yamlCfg, err := os.ReadFile(CONFIG_DIR + "general.yaml")
 	if err != nil {
 		panic("error reading config file: " + err.Error())
 	}
 
-	fmt.Println(string(data))
-
-	err = json.Unmarshal(data, rawCfg)
+	err = viper.ReadConfig(bytes.NewBuffer(yamlCfg))
 	if err != nil {
-		panic("error unmarshaling config file: " + err.Error())
+		panic("error reading config file with viper: " + err.Error())
 	}
 
-	switch rawCfg.Logger.Logger {
+	dbRaw := viper.GetStringMapString("database")
+	config.DatabaseCfg.DatabaseAddress = dbRaw["db_address"]
+	config.DatabaseCfg.DatabaseDriver = dbRaw["db_driver"]
+	config.DatabaseCfg.DatabaseUser = dbRaw["db_user"]
+	config.DatabaseCfg.DatabaseSecret = dbRaw["db_secret"]
+
+	nodeRaw := viper.GetStringMapString("node")
+	config.NodeCfg.HTTPAddress = nodeRaw["http_address"]
+	config.NodeCfg.HTTPPort = nodeRaw["http_port"]
+	config.NodeCfg.RPCAddress = nodeRaw["rpc_address"]
+	config.NodeCfg.RPCPort = nodeRaw["rpc_port"]
+
+	logRaw := viper.GetStringMapString("logger")
+
+	switch logRaw["logger"] {
 	case "logrus":
-		cfg.LoggerCfg.Logger = logger.NewLogrusWrapper(rawCfg.Logger.DebugMode)
-	case "slog":
-		// TODO
-		//cfg.LoggerCfg.Logger = logger.NewSLogLogger(rawCfg.Logger.DebugMode)
-		mock.ImplementMePanic()
-	default:
-		cfg.LoggerCfg.Logger = logger.NewDefaultLogger(rawCfg.Logger.DebugMode)
+		config.LoggerCfg.Logger = logger.NewLogrusWrapper(viper.GetBool("logger.debug"))
 	}
 
-	cfg.NodeCfg = &NodeConfig{
-		log:         cfg.LoggerCfg.Logger,
-		HTTPAddress: rawCfg.Node.HTTPAddress,
-		HTTPPort:    rawCfg.Node.HTTPPort,
-		RPCAddress:  rawCfg.Node.RPCAddress,
-		RPCPort:     rawCfg.Node.RPCPort,
-	}
-	cfg.DatabaseCfg = (*DatabaseConfig)(&rawCfg.Database)
-
-	return &cfg
+	return &config
 }
 
 func (c *Config) GetDatabaseConfig() AbstractDatabaseConfig {
@@ -154,10 +132,10 @@ func (c *NodeConfig) GetRPCAddress() string {
 	return "0.0.0.0"
 }
 
-func (c *NodeConfig) SetLogger(l Logger) {
-	c.log = l
+func (c *NodeConfig) SetLogger(l logger.Logger) {
+	c.Logger = l
 }
 
-func (c *LoggerConfig) GetLogger() Logger {
+func (c *LoggerConfig) GetLogger() logger.Logger {
 	return c.Logger
 }
