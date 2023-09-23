@@ -1,4 +1,4 @@
-FROM golang:1.21.1-alpine3.18
+FROM golang:1.21.1-alpine3.18 AS languago_back
 
 ENV LANGUAGO_CONFIG_DIR=/app/cfg/
 

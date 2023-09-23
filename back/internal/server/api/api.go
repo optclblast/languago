@@ -7,6 +7,7 @@ import (
 	"languago/internal/pkg/config"
 	"languago/internal/pkg/logger"
 	"languago/internal/pkg/models/requests/rest"
+	"languago/internal/pkg/repository"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -16,13 +17,15 @@ type (
 	API struct {
 		*mux.Router
 		AuthProvider *Authorizer
+		Repo         repository.DatabaseInteractor
 		log          logger.Logger
 	}
 )
 
-func NewAPI(cfg config.AbstractLoggerConfig) *API {
+func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInteractor) *API {
 	return &API{
 		Router: mux.NewRouter(),
+		Repo:   interactor,
 		log:    logger.ProvideLogger(cfg),
 	}
 }
@@ -61,6 +64,7 @@ func (a *API) randomWord() http.HandlerFunc {
 			return
 		}
 		defer resp.Body.Close()
+
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			a.log.Warn(fmt.Sprintf("error reading response body from %s: %s", randomwordapi, err.Error()))
@@ -68,8 +72,10 @@ func (a *API) randomWord() http.HandlerFunc {
 			w.Write([]byte("error getting random word"))
 			return
 		}
+
 		a.log.Debug(string(body))
 		w.WriteHeader(http.StatusOK)
+		w.Write(body)
 	}
 }
 
@@ -82,13 +88,18 @@ func (a *API) newFlashcard() http.HandlerFunc {
 			a.log.Warn(err)
 			a.response(w, err)
 		}
-		json.Unmarshal(body, req)
-		// todo
+		if err = json.Unmarshal(body, &req); err != nil {
+			err = fmt.Errorf("error parsing request body: %w", err)
+			a.log.Warn(err)
+			a.response(w, err)
+		}
+
+		fmt.Println(req)
 	}
 }
 
-func (a *API) getFlashcard() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+// func (a *API) getFlashcard() http.HandlerFunc {
+// 	return func(w http.ResponseWriter, r *http.Request) {
 
-	}
-}
+// 	}
+// }

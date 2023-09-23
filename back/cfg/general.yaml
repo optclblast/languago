@@ -6,7 +6,7 @@ node:
   
 database: 
   db_address: ""
-  db_driver: "postgresql"
+  db_driver: "postgres"
   db_user: ""
   db_secret": ""
 

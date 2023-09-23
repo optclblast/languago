@@ -1,12 +1,42 @@
 version: '3'
 
+networks:
+  languago:
+    name: languago
+    driver: bridge
+
 services:
-  web:
-    build:
-      context: ./web
-      target: languago-web
+  # web:
+  #   build:
+  #     context: ./web
+  #     target: languago-web
     
   back:
     build:
       context: ./back
-      target: languago-back
+      target: languago_back
+
+  database:
+    image: postgres:15
+    container_name: languago_pg
+    restart: always
+    environment:
+      - PGUSER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=languago
+    volumes:
+      - ./back/cfg/schemas/postgresql/pg.sql:/docker-entrypoint-initdb.d/init.sql
+      - pg_languago:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
+    networks:
+      - languago
+    healthcheck:
+      test: [ "CMD", "-U", "postgres", "pg_isready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  pg_languago:

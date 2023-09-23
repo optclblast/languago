@@ -7,14 +7,15 @@ import (
 	"languago/internal/pkg/repository"
 	"languago/internal/server/api"
 	"net/http"
+
+	_ "github.com/lib/pq"
 )
 
 type (
 	flashcardService struct {
-		API     *api.API
-		Storage repository.DatabaseInteractor //TODO
-		log     logger.Logger
-		Config  ServerConfigPresenter
+		API    *api.API
+		log    logger.Logger
+		Config ServerConfigPresenter
 	}
 
 	ServerConfigPresenter interface {
@@ -28,8 +29,12 @@ type (
 )
 
 func NewService(cfg config.AbstractConfig) Service {
+	dbInteractor, err := repository.NewDatabaseInteractor(cfg.GetDatabaseConfig())
+	if err != nil {
+		panic("can't get database interactor! " + err.Error())
+	}
 	return &flashcardService{
-		API: api.NewAPI(cfg.GetLoggerConfig()),
+		API: api.NewAPI(cfg.GetLoggerConfig(), dbInteractor),
 		log: logger.ProvideLogger(cfg.GetLoggerConfig()),
 	}
 }

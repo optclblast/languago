@@ -22,8 +22,4 @@ CREATE TABLE "decks" (
   "owner" uuid
 );
 
-ALTER TABLE "decks" ADD FOREIGN KEY ("id") REFERENCES "flashcard_decks" ("deck_id");
-
-ALTER TABLE "flashcards" ADD FOREIGN KEY ("id") REFERENCES "flashcard_decks" ("flashcard_id");
-
 ALTER TABLE "decks" ADD FOREIGN KEY ("owner") REFERENCES "users" ("id");
