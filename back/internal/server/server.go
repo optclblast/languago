@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"languago/internal/pkg/closer"
 	"languago/internal/pkg/config"
 	"languago/internal/pkg/logger"
 	"languago/internal/pkg/repository"
@@ -39,7 +40,7 @@ func NewService(cfg config.AbstractConfig) Service {
 	}
 }
 
-func (s *flashcardService) StartService(e chan error) {
+func (s *flashcardService) StartService(e chan error, closer chan closer.CloseFunc) {
 	s.log.Info("Starting server")
 	s.API.Init()
 	go s.listen(e)

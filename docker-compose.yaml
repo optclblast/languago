@@ -15,10 +15,16 @@ services:
     build:
       context: ./back
       target: languago_back
+    networks:
+      - languago
+    depends_on:
+      database:
+        condition: service_healthy
 
   database:
     image: postgres:15
     container_name: languago_pg
+    hostname: languago_db
     restart: always
     environment:
       - PGUSER=postgres
@@ -36,7 +42,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 5s
 
 volumes:
   pg_languago:

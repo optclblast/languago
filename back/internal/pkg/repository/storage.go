@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"languago/internal/pkg/repository/postgresql"
 
 	_ "github.com/lib/pq"
 )
@@ -29,12 +30,12 @@ type (
 	}
 
 	DatabaseInteractor interface {
-		Database() DBTX
+		Database() *postgresql.Queries
 		DDCredentials() DBCredentials
 	}
 
 	databaseInteractor struct {
-		DB     DBTX
+		DB     *postgresql.Queries
 		DBCred DBCredentials
 	}
 
@@ -57,8 +58,10 @@ func NewDatabaseInteractor(cfg abstractDatabaseConfig) (DatabaseInteractor, erro
 		return nil, fmt.Errorf("error initializing database interactor: %w", err)
 	}
 
+	q := postgresql.New(database)
+
 	return &databaseInteractor{
-		DB:     database,
+		DB:     q,
 		DBCred: cred,
 	}, nil
 }
@@ -127,7 +130,7 @@ func (c *DBCred) GetSSLMode() string {
 	return c.SSLMode
 }
 
-func (d *databaseInteractor) Database() DBTX {
+func (d *databaseInteractor) Database() *postgresql.Queries {
 	return d.DB
 }
 

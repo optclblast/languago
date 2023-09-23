@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,8 +10,11 @@ import (
 	"languago/internal/pkg/logger"
 	"languago/internal/pkg/models/requests/rest"
 	"languago/internal/pkg/repository"
+	"languago/internal/pkg/repository/postgresql"
 	"net/http"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )
 
@@ -58,18 +63,14 @@ func (a *API) randomWord() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resp, err := http.Get(randomwordapi)
 		if err != nil {
-			a.log.Warn(fmt.Sprintf("error getting response from %s: %s", randomwordapi, err.Error()))
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("error getting random word"))
+			a.responseError(w, fmt.Errorf("error getting response from %s: %w", randomwordapi, err), http.StatusInternalServerError)
 			return
 		}
 		defer resp.Body.Close()
 
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			a.log.Warn(fmt.Sprintf("error reading response body from %s: %s", randomwordapi, err.Error()))
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("error getting random word"))
+			a.responseError(w, fmt.Errorf("error reading response body from %s: %w", randomwordapi, err), http.StatusInternalServerError)
 			return
 		}
 
@@ -83,18 +84,32 @@ func (a *API) newFlashcard() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req rest.NewFlashcardRequest
 		body, err := io.ReadAll(r.Body)
+		defer r.Body.Close()
+
 		if err != nil {
-			err = fmt.Errorf("error reading request body: %w", err)
-			a.log.Warn(err)
-			a.response(w, err)
+			a.responseError(w, fmt.Errorf("error reading request body: %w", err), http.StatusBadRequest)
+			return
 		}
 		if err = json.Unmarshal(body, &req); err != nil {
-			err = fmt.Errorf("error parsing request body: %w", err)
-			a.log.Warn(err)
-			a.response(w, err)
+			a.responseError(w, fmt.Errorf("error parsing request body: %w", err), http.StatusBadRequest)
+			return
 		}
 
-		fmt.Println(req)
+		ctx, c := context.WithTimeout(context.Background(), 5*time.Second)
+		defer c()
+
+		_, err = a.Repo.Database().CreateFlashcard(ctx, postgresql.CreateFlashcardParams{
+			ID:      uuid.New(),
+			Word:    sql.NullString{String: req.Content.WordInTarget, Valid: true},
+			Meaning: sql.NullString{String: req.Content.WordInNative, Valid: true},
+			Usage:   req.Content.UsageExamples,
+		})
+		if err != nil {
+			a.responseError(w, fmt.Errorf("internal server error"), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
 	}
 }
 
