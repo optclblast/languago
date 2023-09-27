@@ -6,17 +6,16 @@ import (
 	"languago/internal/pkg/config"
 	"languago/internal/server"
 	"log"
-	"os/signal"
-	"syscall"
 )
 
 func main() {
-	ctx, stop := signal.NotifyContext(
-		context.Background(),
-		syscall.SIGINT,
-		syscall.SIGTERM,
-	)
-	defer stop()
+	// ctx, stop := signal.NotifyContext(
+	// 	context.Background(),
+	// 	syscall.SIGINT,
+	// 	syscall.SIGTERM,
+	// )
+	// defer stop()
+	ctx := context.Background()
 
 	if err := start(ctx); err != nil {
 		log.Fatal(err)

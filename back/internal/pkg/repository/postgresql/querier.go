@@ -26,9 +26,13 @@ type Querier interface {
 	EditDeckProps(ctx context.Context, arg EditDeckPropsParams) error
 	SelectDeck(ctx context.Context, id uuid.UUID) (Deck, error)
 	SelectDecksByName(ctx context.Context, name sql.NullString) ([]Deck, error)
-	SelectFlashcards(ctx context.Context, arg SelectFlashcardsParams) ([]Flashcard, error)
+	SelectFlashcardByID(ctx context.Context, id uuid.UUID) (Flashcard, error)
+	SelectFlashcardByMeaning(ctx context.Context, arg SelectFlashcardByMeaningParams) ([]SelectFlashcardByMeaningRow, error)
+	SelectFlashcardByWord(ctx context.Context, arg SelectFlashcardByWordParams) ([]SelectFlashcardByWordRow, error)
 	SelectOwnerDecks(ctx context.Context, owner uuid.NullUUID) ([]Deck, error)
-	SelectUser(ctx context.Context, arg SelectUserParams) error
+	SelectUser(ctx context.Context, arg SelectUserParams) (User, error)
+	SelectUserByID(ctx context.Context, id uuid.UUID) (User, error)
+	SelectUserByLogin(ctx context.Context, login sql.NullString) (User, error)
 	UpdateFlashcard(ctx context.Context, arg UpdateFlashcardParams) error
 	UpdateUserLogin(ctx context.Context, arg UpdateUserLoginParams) (UpdateUserLoginRow, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error

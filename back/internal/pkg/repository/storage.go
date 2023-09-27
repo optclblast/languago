@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"languago/internal/pkg/models/requests/rest"
 	"languago/internal/pkg/repository/postgresql"
 
 	_ "github.com/lib/pq"
@@ -32,6 +33,7 @@ type (
 	DatabaseInteractor interface {
 		Database() *postgresql.Queries
 		DDCredentials() DBCredentials
+		EditFlashcard(ctx context.Context, arg *rest.EditFlashcardRequest) error
 	}
 
 	databaseInteractor struct {

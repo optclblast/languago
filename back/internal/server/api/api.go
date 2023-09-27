@@ -35,11 +35,11 @@ func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInter
 	}
 }
 func (api *API) routes() {
-	api.HandleFunc("/randomword", api.randomWord()).Methods(http.MethodGet) // test
-	// api.HandleFunc("/flashcard", api.getFlashcard()).Methods(http.MethodGet)
-	api.HandleFunc("/flashcard", api.newFlashcard()).Methods(http.MethodPost)
-	// api.HandleFunc("/flashcard", api.deleteFlashcard()).Methods(http.MethodPost)
-	// api.HandleFunc("/flashcard", api.editFlashcard()).Methods(http.MethodPost)
+	api.HandleFunc("/randomword", api.randomWordHandler()).Methods(http.MethodGet) // test
+	api.HandleFunc("/flashcard", api.getFlashcardHandler()).Methods(http.MethodGet)
+	api.HandleFunc("/flashcard", api.newFlashcardHandler()).Methods(http.MethodPost)
+	api.HandleFunc("/flashcard", api.deleteFlashcardHandler()).Methods(http.MethodPost)
+	api.HandleFunc("/flashcard", api.editFlashcardHandler()).Methods(http.MethodPost)
 }
 
 const (
@@ -56,10 +56,10 @@ const (
 
 func (a *API) Init() {
 	a.routes()
-	a.log.Info("api initialized")
+	a.log.Info("api initialized", nil)
 }
 
-func (a *API) randomWord() http.HandlerFunc {
+func (a *API) randomWordHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resp, err := http.Get(randomwordapi)
 		if err != nil {
@@ -74,13 +74,13 @@ func (a *API) randomWord() http.HandlerFunc {
 			return
 		}
 
-		a.log.Debug(string(body))
+		a.log.Debug(string(body), nil)
 		w.WriteHeader(http.StatusOK)
 		w.Write(body)
 	}
 }
 
-func (a *API) newFlashcard() http.HandlerFunc {
+func (a *API) newFlashcardHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req rest.NewFlashcardRequest
 		body, err := io.ReadAll(r.Body)
@@ -113,8 +113,165 @@ func (a *API) newFlashcard() http.HandlerFunc {
 	}
 }
 
-// func (a *API) getFlashcard() http.HandlerFunc {
-// 	return func(w http.ResponseWriter, r *http.Request) {
+// TODO refactor this pls
+func (a *API) getFlashcardHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Query().Get("id")
+		deckId := r.URL.Query().Get("deck_id")
+		word := r.URL.Query().Get("word")
+		meaning := r.URL.Query().Get("word")
 
-// 	}
-// }
+		ctx, c := context.WithTimeout(context.Background(), 5*time.Second)
+		defer c()
+
+		// TODO refactoring of this abomination
+		var response *rest.GetFlashcardResponse
+		if id != "" {
+			id, err := uuid.Parse(id)
+			if err != nil {
+				a.responseError(w, err, http.StatusBadRequest)
+				return
+			}
+			card, err := a.Repo.Database().SelectFlashcardByID(ctx, id)
+			if err != nil {
+				a.responseError(w, err, http.StatusBadRequest)
+				return
+			}
+
+			err = response.FromFlashcardObject([]*postgresql.Flashcard{&card})
+			if err != nil {
+				a.responseError(w, fmt.Errorf("empty flashcard"), http.StatusBadRequest)
+				return
+			}
+
+			resp, err := json.Marshal(response)
+			if err != nil {
+				a.responseError(w, fmt.Errorf("internal error"), http.StatusBadRequest)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			w.Write(resp)
+		} else if deckId != "" {
+			deckId, err := uuid.Parse(deckId)
+			if err != nil {
+				a.responseError(w, err, http.StatusBadRequest)
+				return
+			}
+			if word != "" {
+				card, err := a.Repo.Database().SelectFlashcardByWord(ctx, postgresql.SelectFlashcardByWordParams{
+					DeckID: uuid.NullUUID{
+						UUID:  deckId,
+						Valid: true,
+					},
+					Word: sql.NullString{
+						String: word,
+						Valid:  true,
+					},
+				})
+				if err != nil {
+					a.responseError(w, err, http.StatusBadRequest)
+					return
+				}
+
+				err = response.FromFlashcardByWordObject(card)
+				if err != nil {
+					a.responseError(w, fmt.Errorf("empty flashcard"), http.StatusBadRequest)
+					return
+				}
+
+				resp, err := json.Marshal(response)
+				if err != nil {
+					a.responseError(w, fmt.Errorf("internal error"), http.StatusBadRequest)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+				w.Write(resp)
+			} else if meaning != "" {
+				card, err := a.Repo.Database().SelectFlashcardByMeaning(ctx, postgresql.SelectFlashcardByMeaningParams{
+					DeckID: uuid.NullUUID{
+						UUID:  deckId,
+						Valid: true,
+					},
+					Meaning: sql.NullString{
+						String: meaning,
+						Valid:  true,
+					},
+				})
+				if err != nil {
+					a.responseError(w, err, http.StatusBadRequest)
+					return
+				}
+
+				err = response.FromFlashcardByMeaningObject(card)
+				if err != nil {
+					a.responseError(w, fmt.Errorf("empty flashcard"), http.StatusBadRequest)
+					return
+				}
+
+				resp, err := json.Marshal(response)
+				if err != nil {
+					a.responseError(w, fmt.Errorf("internal error"), http.StatusBadRequest)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+				w.Write(resp)
+			} else {
+				a.responseError(w, nil, http.StatusBadRequest)
+				return
+			}
+		} else {
+			a.responseError(w, nil, http.StatusBadRequest)
+			return
+		}
+	}
+}
+
+func (a *API) deleteFlashcardHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Query().Get("id")
+		uuid, err := uuid.Parse(id)
+		if err != nil {
+			a.responseError(w, err, http.StatusBadRequest)
+			return
+		}
+
+		ctx, c := context.WithTimeout(context.Background(), 5*time.Second)
+		defer c()
+
+		err = a.Repo.Database().DeleteFlashcard(ctx, uuid)
+		if err != nil {
+			a.responseError(w, err, http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func (a *API) editFlashcardHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var request *rest.EditFlashcardRequest
+		body, err := io.ReadAll(r.Body)
+		defer r.Body.Close()
+
+		if err != nil {
+			a.responseError(w, fmt.Errorf("error reading request body: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		if err = json.Unmarshal(body, &request); err != nil {
+			a.responseError(w, fmt.Errorf("error parsing request body: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		ctx, c := context.WithTimeout(context.Background(), 5*time.Second)
+		defer c()
+
+		err = a.Repo.EditFlashcard(ctx, request)
+		if err != nil {
+			a.responseError(w, fmt.Errorf("error editing flashcard: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}
+}

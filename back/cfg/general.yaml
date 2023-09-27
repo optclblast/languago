@@ -11,5 +11,5 @@ database:
   db_secret": "postgres"
 
 logger:
-  logger: "logrus"
+  logger: "std"
   debug: true

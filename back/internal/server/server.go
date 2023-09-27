@@ -41,13 +41,13 @@ func NewService(cfg config.AbstractConfig) Service {
 }
 
 func (s *flashcardService) StartService(e chan error, closer chan closer.CloseFunc) {
-	s.log.Info("Starting server")
+	s.log.Info("Starting server", nil)
 	s.API.Init()
 	go s.listen(e)
 }
 
 func (s *flashcardService) StopService() error {
-	s.log.Warn("started flashcard service shutdown")
+	s.log.Warn("started flashcard service shutdown", nil)
 	// TODO safe shutdown
 	return nil
 }

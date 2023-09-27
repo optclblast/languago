@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"languago/internal/pkg/closer"
 	"languago/internal/pkg/config"
+	"languago/internal/pkg/languagoerr"
 	"languago/internal/pkg/logger"
 	"time"
 
@@ -15,7 +16,6 @@ type (
 	Node interface {
 		Run()
 		Stop()
-		TODO()
 		Healthcheck() []error
 		SetConfig(cfg config.AbstractNodeConfig)
 	}
@@ -68,7 +68,7 @@ func (n *node) Run() {
 	go n.errorHandler()
 	for name, s := range n.Services {
 		s.StartService(n.ErrorCh, n.closerCh)
-		n.Logger.Info(fmt.Sprintf("service %s successfully started", name))
+		n.Logger.Info(fmt.Sprintf("service %s successfully started", name), nil)
 	}
 	<-n.StopCh
 }
@@ -80,10 +80,7 @@ func (n *node) Stop() {
 	)
 	defer cancel()
 	n.closer.Close(ctx)
-	n.TODO()
 }
-
-func (n *node) TODO() {}
 
 func (n *node) Healthcheck() []error {
 	var errs []error
@@ -101,6 +98,12 @@ func (n *node) SetConfig(cfg config.AbstractNodeConfig) {
 
 func (n *node) errorHandler() {
 	for {
-		n.Logger.Warn("error: ", <-n.ErrorCh)
+		err := <-n.ErrorCh
+		if _, ok := err.(*languagoerr.FatalErr); ok {
+			n.Logger.Warn("fatal service error: ", logger.LogFieldPair(logger.ErrorField, <-n.ErrorCh))
+			// TODO restart service handler, like this -> n.RestartService() or sthg
+			continue
+		}
+		n.Logger.Info("error: ", logger.LogFieldPair(logger.ErrorField, <-n.ErrorCh))
 	}
 }

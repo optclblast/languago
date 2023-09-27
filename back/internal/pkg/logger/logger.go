@@ -2,9 +2,9 @@ package logger
 
 import (
 	"log"
-	"log/slog"
 
 	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 type (
@@ -17,22 +17,31 @@ type (
 		log     *log.Logger
 	}
 
+	ZapWrapper struct {
+		dbgMode bool
+		log     *zap.Logger
+	}
+
 	LogrusWrapper struct {
 		dbgMode bool
 		log     *logrus.Entry
 	}
 
-	SlogLogger struct {
-		dbgMode bool
-		log     *slog.Logger
+	Logger interface {
+		Warn(msg string, kv LogFields)
+		//Err(msg string, kv LogFields)
+		Debug(msg string, kv LogFields)
+		Info(msg string, kv LogFields)
+		Log(msg string, kv LogFields)
 	}
 
-	Logger interface {
-		Warn(kv ...interface{})
-		Debug(kv ...interface{})
-		Info(kv ...interface{})
-		Log(kv ...interface{})
-	}
+	LogFields map[string]interface{}
+)
+
+const (
+	MessageField string = "message"
+	ErrorField   string = "error"
+	ContentField string = "content"
 )
 
 func NewLogrusWrapper(dbg bool) *LogrusWrapper {
@@ -42,45 +51,15 @@ func NewLogrusWrapper(dbg bool) *LogrusWrapper {
 	}
 }
 
-func NewSLogLogger(dbg bool) *SlogLogger {
-	return &SlogLogger{
+func NewZapWrapper(dbg bool) *ZapWrapper {
+	return &ZapWrapper{
 		dbgMode: dbg,
-		log:     slog.Default(),
+		log:     zap.Must(zap.NewProduction()),
 	}
 }
 
 func NewDefaultLogger(dbg bool) *DefaultLogger {
 	return provideDefaultLogger(dbg)
-}
-
-// TODO
-// Extends std Logger type to fit the Logger interface
-func (l *DefaultLogger) Warn(kv ...interface{}) {
-	l.log.SetPrefix("[WARN]")
-	l.log.Println(kv...)
-}
-func (l *DefaultLogger) Err(kv ...interface{}) {
-	l.log.SetPrefix("[ERROR]")
-	l.log.Println(kv...)
-}
-func (l *DefaultLogger) Debug(kv ...interface{}) {
-	if !l.dbgMode {
-		return
-	}
-	l.log.SetPrefix("[DEBUG]")
-	l.log.Println(kv...)
-}
-func (l *DefaultLogger) Info(kv ...interface{}) {
-	l.log.SetPrefix("[INFO]")
-	l.log.Println(kv...)
-}
-func (l *DefaultLogger) Log(kv ...interface{}) {
-	l.log.SetPrefix("[LOG]")
-	l.log.Println(kv...)
-}
-func (l *DefaultLogger) Panic(kv ...interface{}) {
-	l.log.SetPrefix("[PANIC]")
-	l.log.Panicln(kv...)
 }
 
 func ProvideLogger(cfg abstractLoggerConfig) Logger {
@@ -121,27 +100,8 @@ func provideDefaultLogger(dbg bool) *DefaultLogger {
 	return &logger
 }
 
-func (l *LogrusWrapper) Warn(kv ...interface{}) {
-	l.log.Warnln(kv...)
+func LogFieldPair(key string, val any) LogFields {
+	lf := make(LogFields, 0)
+	lf[key] = val
+	return lf
 }
-
-func (l *LogrusWrapper) Debug(kv ...interface{}) {
-	if !l.dbgMode {
-		return
-	}
-	l.log.Debugln(kv...)
-}
-
-func (l *LogrusWrapper) Info(kv ...interface{}) {
-	l.log.Infoln(kv...)
-}
-
-func (l *LogrusWrapper) Log(kv ...interface{}) {
-	l.log.Logln(logrus.InfoLevel, kv...)
-}
-
-func (l *LogrusWrapper) Panic(kv ...interface{}) {
-	l.log.Panic(kv...)
-}
-
-// TODO slog impl
