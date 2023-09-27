@@ -1,9 +1,13 @@
 package server
 
 import (
+	"context"
 	"fmt"
+	"languago/internal/pkg/closer"
 	"languago/internal/pkg/config"
+	"languago/internal/pkg/languagoerr"
 	"languago/internal/pkg/logger"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -12,25 +16,25 @@ type (
 	Node interface {
 		Run()
 		Stop()
-		TODO()
 		Healthcheck() []error
 		SetConfig(cfg config.AbstractNodeConfig)
 	}
 
 	Service interface {
-		StartService(e chan error)
+		StartService(e chan error, closer chan closer.CloseFunc)
 		StopService() error
 		Ping() bool
 	}
 
 	node struct {
-		Id        uuid.UUID
-		config    config.AbstractNodeConfig
-		Logger    logger.Logger
-		Services  map[string]Service
-		ErrorCh   chan error
-		StopCh    chan struct{}
-		StopFuncs []StopFunc
+		Id       uuid.UUID
+		config   config.AbstractNodeConfig
+		Logger   logger.Logger
+		Services map[string]Service
+		ErrorCh  chan error
+		StopCh   chan struct{}
+		closer   closer.Closer
+		closerCh chan closer.CloseFunc
 	}
 
 	StopFunc func(n Node) error
@@ -39,6 +43,7 @@ type (
 		Services  map[string]Service
 		StopFuncs []StopFunc
 		Logger    logger.Logger
+		Closer    closer.Closer
 	}
 )
 
@@ -51,32 +56,31 @@ func NewNode(args *NewNodeParams) (Node, error) {
 	}
 
 	return &node{
-		Id:        uuid.New(),
-		Logger:    args.Logger,
-		Services:  args.Services,
-		StopFuncs: args.StopFuncs,
+		Id:       uuid.New(),
+		Logger:   args.Logger,
+		Services: args.Services,
+		closer:   args.Closer,
+		closerCh: make(chan closer.CloseFunc),
 	}, nil
 }
 
 func (n *node) Run() {
 	go n.errorHandler()
 	for name, s := range n.Services {
-		s.StartService(n.ErrorCh)
-		n.Logger.Info(fmt.Sprintf("service %s successfully started", name))
+		s.StartService(n.ErrorCh, n.closerCh)
+		n.Logger.Info(fmt.Sprintf("service %s successfully started", name), nil)
 	}
 	<-n.StopCh
 }
 
 func (n *node) Stop() {
-	for _, fn := range n.StopFuncs {
-		if err := fn(n); err != nil {
-			n.Logger.Warn(fmt.Sprintf("error applying stop func: %s", err.Error()))
-		}
-	}
-	n.TODO()
+	ctx, cancel := context.WithDeadline(
+		context.Background(),
+		time.Now().Add(10*time.Second),
+	)
+	defer cancel()
+	n.closer.Close(ctx)
 }
-
-func (n *node) TODO() {}
 
 func (n *node) Healthcheck() []error {
 	var errs []error
@@ -94,6 +98,12 @@ func (n *node) SetConfig(cfg config.AbstractNodeConfig) {
 
 func (n *node) errorHandler() {
 	for {
-		n.Logger.Warn("error: ", <-n.ErrorCh)
+		err := <-n.ErrorCh
+		if _, ok := err.(*languagoerr.FatalErr); ok {
+			n.Logger.Warn("fatal service error: ", logger.LogFieldPair(logger.ErrorField, <-n.ErrorCh))
+			// TODO restart service handler, like this -> n.RestartService() or sthg
+			continue
+		}
+		n.Logger.Info("error: ", logger.LogFieldPair(logger.ErrorField, <-n.ErrorCh))
 	}
 }

@@ -22,3 +22,9 @@ type Flashcard struct {
 	Meaning sql.NullString `db:"meaning" json:"meaning"`
 	Usage   []string       `db:"usage" json:"usage"`
 }
+
+type User struct {
+	ID       uuid.UUID      `db:"id" json:"id"`
+	Login    sql.NullString `db:"login" json:"login"`
+	Password sql.NullString `db:"password" json:"password"`
+}

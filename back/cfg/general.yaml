@@ -5,11 +5,11 @@ node:
   rpc_port: ""
   
 database: 
-  db_address: ""
-  db_driver: "postgresql"
-  db_user: ""
-  db_secret": ""
+  db_address: "languago_db:5432"
+  db_driver: "postgres"
+  db_user: "postgres"
+  db_secret": "postgres"
 
 logger:
-  logger: "logrus"
+  logger: "std"
   debug: true

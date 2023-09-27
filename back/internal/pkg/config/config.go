@@ -2,8 +2,8 @@ package config
 
 import (
 	"bytes"
+	"fmt"
 	"languago/internal/pkg/logger"
-	"languago/internal/pkg/mock"
 	"languago/internal/pkg/repository"
 	"os"
 
@@ -96,6 +96,12 @@ func InitialConfiguration() AbstractConfig {
 	switch logRaw["logger"] {
 	case "logrus":
 		config.LoggerCfg.Logger = logger.NewLogrusWrapper(viper.GetBool("logger.debug"))
+	case "zap":
+		config.LoggerCfg.Logger = logger.NewZapWrapper(viper.GetBool("logger.debug"))
+	case "std":
+		config.LoggerCfg.Logger = logger.NewDefaultLogger(viper.GetBool("logger.debug"))
+	default:
+		config.LoggerCfg.Logger = logger.NewZapWrapper(viper.GetBool("logger.debug"))
 	}
 
 	return &config
@@ -123,13 +129,11 @@ func (c *DatabaseConfig) GetCredentials() repository.DBCredentials {
 }
 
 func (c *NodeConfig) GetHTTPAddress() string {
-	mock.ImplementMePanic()
-	return "localhost"
+	return fmt.Sprintf("%s:%s", c.HTTPAddress, c.HTTPPort)
 }
 
 func (c *NodeConfig) GetRPCAddress() string {
-	mock.ImplementMePanic()
-	return "0.0.0.0"
+	return fmt.Sprintf("%s:%s", c.RPCAddress, c.RPCPort)
 }
 
 func (c *NodeConfig) SetLogger(l logger.Logger) {

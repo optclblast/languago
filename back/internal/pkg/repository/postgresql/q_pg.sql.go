@@ -212,37 +212,111 @@ func (q *Queries) SelectDecksByName(ctx context.Context, name sql.NullString) ([
 	return items, nil
 }
 
-const selectFlashcards = `-- name: SelectFlashcards :many
+const selectFlashcardByID = `-- name: SelectFlashcardByID :one
 SELECT id, word, meaning, usage FROM flashcards 
-    WHERE id = $1 AND word = $2 AND meaning = $3 AND usage = $4
+    WHERE id = $1
 `
 
-type SelectFlashcardsParams struct {
-	ID      uuid.UUID      `db:"id" json:"id"`
-	Word    sql.NullString `db:"word" json:"word"`
-	Meaning sql.NullString `db:"meaning" json:"meaning"`
-	Usage   []string       `db:"usage" json:"usage"`
+func (q *Queries) SelectFlashcardByID(ctx context.Context, id uuid.UUID) (Flashcard, error) {
+	row := q.db.QueryRowContext(ctx, selectFlashcardByID, id)
+	var i Flashcard
+	err := row.Scan(
+		&i.ID,
+		&i.Word,
+		&i.Meaning,
+		pq.Array(&i.Usage),
+	)
+	return i, err
 }
 
-func (q *Queries) SelectFlashcards(ctx context.Context, arg SelectFlashcardsParams) ([]Flashcard, error) {
-	rows, err := q.db.QueryContext(ctx, selectFlashcards,
-		arg.ID,
-		arg.Word,
-		arg.Meaning,
-		pq.Array(arg.Usage),
-	)
+const selectFlashcardByMeaning = `-- name: SelectFlashcardByMeaning :many
+SELECT id, word, meaning, usage, deck_id, flashcard_id FROM flashcards AS f
+    INNER JOIN flashcard_decks AS d
+        ON d.deck_id = $1
+    WHERE meaning = $2
+`
+
+type SelectFlashcardByMeaningParams struct {
+	DeckID  uuid.NullUUID  `db:"deck_id" json:"deck_id"`
+	Meaning sql.NullString `db:"meaning" json:"meaning"`
+}
+
+type SelectFlashcardByMeaningRow struct {
+	ID          uuid.UUID      `db:"id" json:"id"`
+	Word        sql.NullString `db:"word" json:"word"`
+	Meaning     sql.NullString `db:"meaning" json:"meaning"`
+	Usage       []string       `db:"usage" json:"usage"`
+	DeckID      uuid.NullUUID  `db:"deck_id" json:"deck_id"`
+	FlashcardID uuid.NullUUID  `db:"flashcard_id" json:"flashcard_id"`
+}
+
+func (q *Queries) SelectFlashcardByMeaning(ctx context.Context, arg SelectFlashcardByMeaningParams) ([]SelectFlashcardByMeaningRow, error) {
+	rows, err := q.db.QueryContext(ctx, selectFlashcardByMeaning, arg.DeckID, arg.Meaning)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Flashcard
+	var items []SelectFlashcardByMeaningRow
 	for rows.Next() {
-		var i Flashcard
+		var i SelectFlashcardByMeaningRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Word,
 			&i.Meaning,
 			pq.Array(&i.Usage),
+			&i.DeckID,
+			&i.FlashcardID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const selectFlashcardByWord = `-- name: SelectFlashcardByWord :many
+SELECT id, word, meaning, usage, deck_id, flashcard_id FROM flashcards AS f
+    INNER JOIN flashcard_decks AS d
+        ON d.deck_id = $1
+    WHERE word = $2
+`
+
+type SelectFlashcardByWordParams struct {
+	DeckID uuid.NullUUID  `db:"deck_id" json:"deck_id"`
+	Word   sql.NullString `db:"word" json:"word"`
+}
+
+type SelectFlashcardByWordRow struct {
+	ID          uuid.UUID      `db:"id" json:"id"`
+	Word        sql.NullString `db:"word" json:"word"`
+	Meaning     sql.NullString `db:"meaning" json:"meaning"`
+	Usage       []string       `db:"usage" json:"usage"`
+	DeckID      uuid.NullUUID  `db:"deck_id" json:"deck_id"`
+	FlashcardID uuid.NullUUID  `db:"flashcard_id" json:"flashcard_id"`
+}
+
+func (q *Queries) SelectFlashcardByWord(ctx context.Context, arg SelectFlashcardByWordParams) ([]SelectFlashcardByWordRow, error) {
+	rows, err := q.db.QueryContext(ctx, selectFlashcardByWord, arg.DeckID, arg.Word)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SelectFlashcardByWordRow
+	for rows.Next() {
+		var i SelectFlashcardByWordRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Word,
+			&i.Meaning,
+			pq.Array(&i.Usage),
+			&i.DeckID,
+			&i.FlashcardID,
 		); err != nil {
 			return nil, err
 		}
@@ -285,7 +359,7 @@ func (q *Queries) SelectOwnerDecks(ctx context.Context, owner uuid.NullUUID) ([]
 	return items, nil
 }
 
-const selectUser = `-- name: SelectUser :exec
+const selectUser = `-- name: SelectUser :one
 SELECT id, login, password FROM users 
     WHERE id = $1 AND login = $2
 `
@@ -295,35 +369,58 @@ type SelectUserParams struct {
 	Login sql.NullString `db:"login" json:"login"`
 }
 
-func (q *Queries) SelectUser(ctx context.Context, arg SelectUserParams) error {
-	_, err := q.db.ExecContext(ctx, selectUser, arg.ID, arg.Login)
-	return err
+func (q *Queries) SelectUser(ctx context.Context, arg SelectUserParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, selectUser, arg.ID, arg.Login)
+	var i User
+	err := row.Scan(&i.ID, &i.Login, &i.Password)
+	return i, err
+}
+
+const selectUserByID = `-- name: SelectUserByID :one
+SELECT id, login, password FROM users 
+    WHERE id = $1
+`
+
+func (q *Queries) SelectUserByID(ctx context.Context, id uuid.UUID) (User, error) {
+	row := q.db.QueryRowContext(ctx, selectUserByID, id)
+	var i User
+	err := row.Scan(&i.ID, &i.Login, &i.Password)
+	return i, err
+}
+
+const selectUserByLogin = `-- name: SelectUserByLogin :one
+SELECT id, login, password FROM users 
+    WHERE login = $1
+`
+
+func (q *Queries) SelectUserByLogin(ctx context.Context, login sql.NullString) (User, error) {
+	row := q.db.QueryRowContext(ctx, selectUserByLogin, login)
+	var i User
+	err := row.Scan(&i.ID, &i.Login, &i.Password)
+	return i, err
 }
 
 const updateFlashcard = `-- name: UpdateFlashcard :exec
 UPDATE flashcards SET
-    id = $1,
-    word = $2,
-    meaning = $3,
-    usage = $4
-    WHERE id = $5
+    word = $1,
+    meaning = $2,
+    usage = $3
+    WHERE id = $4
 `
 
 type UpdateFlashcardParams struct {
-	ID      uuid.UUID      `db:"id" json:"id"`
 	Word    sql.NullString `db:"word" json:"word"`
 	Meaning sql.NullString `db:"meaning" json:"meaning"`
 	Usage   []string       `db:"usage" json:"usage"`
-	ID_2    uuid.UUID      `db:"id_2" json:"id_2"`
+	ID      uuid.UUID      `db:"id" json:"id"`
 }
 
 func (q *Queries) UpdateFlashcard(ctx context.Context, arg UpdateFlashcardParams) error {
 	_, err := q.db.ExecContext(ctx, updateFlashcard,
-		arg.ID,
 		arg.Word,
 		arg.Meaning,
 		pq.Array(arg.Usage),
-		arg.ID_2,
+		arg.ID,
 	)
 	return err
 }

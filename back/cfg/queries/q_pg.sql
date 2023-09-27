@@ -5,9 +5,17 @@ INSERT INTO users
     VALUES 
     ($1, $2, $3);
 
--- name: SelectUser :exec
+-- name: SelectUser :one
 SELECT * FROM users 
     WHERE id = $1 AND login = $2;
+
+-- name: SelectUserByLogin :one
+SELECT * FROM users 
+    WHERE login = $1;
+
+-- name: SelectUserByID :one
+SELECT * FROM users 
+    WHERE id = $1;
 
 -- name: UpdateUserLogin :one
 UPDATE users SET login = $1
@@ -30,17 +38,28 @@ INSERT INTO flashcards
     ($1, $2, $3, $4)
     RETURNING word, meaning, usage;
 
--- name: SelectFlashcards :many
+-- name: SelectFlashcardByID :one
 SELECT * FROM flashcards 
-    WHERE id = $1 AND word = $2 AND meaning = $3 AND usage = $4;
+    WHERE id = $1;
+
+-- name: SelectFlashcardByMeaning :many
+SELECT * FROM flashcards AS f
+    INNER JOIN flashcard_decks AS d
+        ON d.deck_id = $1
+    WHERE meaning = $2;
+
+-- name: SelectFlashcardByWord :many
+SELECT * FROM flashcards AS f
+    INNER JOIN flashcard_decks AS d
+        ON d.deck_id = $1
+    WHERE word = $2;
 
 -- name: UpdateFlashcard :exec
 UPDATE flashcards SET
-    id = $1,
-    word = $2,
-    meaning = $3,
-    usage = $4
-    WHERE id = $5;
+    word = $1,
+    meaning = $2,
+    usage = $3
+    WHERE id = $4;
 
 -- name: DeleteFlashcard :exec
 DELETE FROM flashcards 
