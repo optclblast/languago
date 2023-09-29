@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"languago/internal/pkg/models/requests/rest"
-	"languago/internal/pkg/repository/postgresql"
 
 	_ "github.com/lib/pq"
 )
@@ -31,13 +29,12 @@ type (
 	}
 
 	DatabaseInteractor interface {
-		Database() *postgresql.Queries
+		Database() Storage
 		DDCredentials() DBCredentials
-		EditFlashcard(ctx context.Context, arg *rest.EditFlashcardRequest) error
 	}
 
 	databaseInteractor struct {
-		DB     *postgresql.Queries
+		DB     Storage
 		DBCred DBCredentials
 	}
 
@@ -60,12 +57,18 @@ func NewDatabaseInteractor(cfg abstractDatabaseConfig) (DatabaseInteractor, erro
 		return nil, fmt.Errorf("error initializing database interactor: %w", err)
 	}
 
-	q := postgresql.New(database)
+	var interactor *databaseInteractor
+	driver := cred.GetDriver()
+	if driver == "postgres" {
+		interactor.DB = newPGStorage(database)
+	} else if driver == "mysql" {
+		interactor.DB = newMySQLStorage(database)
+	} else {
+		return nil, fmt.Errorf("error invalid driver %s", driver)
+	}
 
-	return &databaseInteractor{
-		DB:     q,
-		DBCred: cred,
-	}, nil
+	interactor.DBCred = cred
+	return interactor, nil
 }
 
 // TODO
@@ -132,7 +135,7 @@ func (c *DBCred) GetSSLMode() string {
 	return c.SSLMode
 }
 
-func (d *databaseInteractor) Database() *postgresql.Queries {
+func (d *databaseInteractor) Database() Storage {
 	return d.DB
 }
 

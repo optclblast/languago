@@ -2,15 +2,14 @@ package api
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"languago/internal/pkg/config"
 	"languago/internal/pkg/logger"
+	"languago/internal/pkg/models/entities"
 	"languago/internal/pkg/models/requests/rest"
 	"languago/internal/pkg/repository"
-	"languago/internal/pkg/repository/postgresql"
 	"net/http"
 	"time"
 
@@ -98,10 +97,10 @@ func (a *API) newFlashcardHandler() http.HandlerFunc {
 		ctx, c := context.WithTimeout(context.Background(), 5*time.Second)
 		defer c()
 
-		_, err = a.Repo.Database().CreateFlashcard(ctx, postgresql.CreateFlashcardParams{
+		err = a.Repo.Database().CreateFlashcard(ctx, repository.CreateFlashcardParams{
 			ID:      uuid.New(),
-			Word:    sql.NullString{String: req.Content.WordInTarget, Valid: true},
-			Meaning: sql.NullString{String: req.Content.WordInNative, Valid: true},
+			Word:    req.Content.WordInTarget,
+			Meaning: req.Content.WordInNative,
 			Usage:   req.Content.UsageExamples,
 		})
 		if err != nil {
@@ -132,18 +131,15 @@ func (a *API) getFlashcardHandler() http.HandlerFunc {
 				a.responseError(w, err, http.StatusBadRequest)
 				return
 			}
-			card, err := a.Repo.Database().SelectFlashcardByID(ctx, id)
+			card, err := a.Repo.Database().SelectFlashcard(ctx, repository.SelectFlashcardParams{
+				ID: id,
+			})
 			if err != nil {
 				a.responseError(w, err, http.StatusBadRequest)
 				return
 			}
 
-			err = response.FromFlashcardObject([]*postgresql.Flashcard{&card})
-			if err != nil {
-				a.responseError(w, fmt.Errorf("empty flashcard"), http.StatusBadRequest)
-				return
-			}
-
+			response.Flashcards = []*entities.Flashcard{card}
 			resp, err := json.Marshal(response)
 			if err != nil {
 				a.responseError(w, fmt.Errorf("internal error"), http.StatusBadRequest)
@@ -158,22 +154,16 @@ func (a *API) getFlashcardHandler() http.HandlerFunc {
 				return
 			}
 			if word != "" {
-				card, err := a.Repo.Database().SelectFlashcardByWord(ctx, postgresql.SelectFlashcardByWordParams{
-					DeckID: uuid.NullUUID{
-						UUID:  deckId,
-						Valid: true,
-					},
-					Word: sql.NullString{
-						String: word,
-						Valid:  true,
-					},
+				card, err := a.Repo.Database().SelectFlashcard(ctx, repository.SelectFlashcardParams{
+					DeckID: deckId,
+					Word:   word,
 				})
 				if err != nil {
 					a.responseError(w, err, http.StatusBadRequest)
 					return
 				}
 
-				err = response.FromFlashcardByWordObject(card)
+				response.Flashcards = []*entities.Flashcard{card}
 				if err != nil {
 					a.responseError(w, fmt.Errorf("empty flashcard"), http.StatusBadRequest)
 					return
@@ -187,22 +177,16 @@ func (a *API) getFlashcardHandler() http.HandlerFunc {
 				w.WriteHeader(http.StatusOK)
 				w.Write(resp)
 			} else if meaning != "" {
-				card, err := a.Repo.Database().SelectFlashcardByMeaning(ctx, postgresql.SelectFlashcardByMeaningParams{
-					DeckID: uuid.NullUUID{
-						UUID:  deckId,
-						Valid: true,
-					},
-					Meaning: sql.NullString{
-						String: meaning,
-						Valid:  true,
-					},
+				card, err := a.Repo.Database().SelectFlashcard(ctx, repository.SelectFlashcardParams{
+					DeckID:  deckId,
+					Meaning: meaning,
 				})
 				if err != nil {
 					a.responseError(w, err, http.StatusBadRequest)
 					return
 				}
 
-				err = response.FromFlashcardByMeaningObject(card)
+				response.Flashcards = []*entities.Flashcard{card}
 				if err != nil {
 					a.responseError(w, fmt.Errorf("empty flashcard"), http.StatusBadRequest)
 					return
@@ -266,7 +250,28 @@ func (a *API) editFlashcardHandler() http.HandlerFunc {
 		ctx, c := context.WithTimeout(context.Background(), 5*time.Second)
 		defer c()
 
-		err = a.Repo.EditFlashcard(ctx, request)
+		id, err := uuid.Parse(request.Id)
+		if err != nil {
+			a.responseError(w, fmt.Errorf("error invalid id: %w", err), http.StatusBadRequest)
+			return
+		}
+		params := repository.UpdateFlashcardParams{
+			ID: id,
+		}
+
+		switch {
+		case request.WordInNative != "":
+			params.Meaning = request.WordInNative
+		case request.WordInTarget != "":
+			params.Word = request.WordInTarget
+		case request.UsageExamples != nil:
+			params.Usage = request.UsageExamples
+		default:
+			a.responseError(w, nil, http.StatusExpectationFailed)
+			return
+		}
+
+		err = a.Repo.Database().UpdateFlashcard(ctx, params)
 		if err != nil {
 			a.responseError(w, fmt.Errorf("error editing flashcard: %w", err), http.StatusBadRequest)
 			return
