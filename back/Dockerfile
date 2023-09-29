@@ -1,4 +1,10 @@
-FROM golang:1.21.1-alpine3.18 AS languago_back
+FROM fedora:38 AS languago_builder 
+
+RUN dnf update && dnf upgrade && \
+    curl -OL https://golang.org/dl/go1.19.5.linux-amd64.tar.gz && \
+                                    sudo rm -rf /usr/local/go && \
+                                    sudo tar -C /usr/local -xzf go*.linux-amd64.tar.gz && \
+    dnf install gcc 
 
 ENV LANGUAGO_CONFIG_DIR=/app/cfg/
 
