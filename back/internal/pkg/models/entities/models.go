@@ -2,6 +2,8 @@ package entities
 
 import (
 	"encoding/json"
+	// "languago/internal/pkg/models/requests/rest"
+	// "languago/internal/pkg/repository/postgresql"
 
 	"github.com/google/uuid"
 )
@@ -28,14 +30,22 @@ type (
 	}
 )
 
-func (u *User) ToJson() ([]byte, error) {
-	return json.Marshal(u)
+func (m *User) ToJson() ([]byte, error) {
+	return json.Marshal(m)
 }
 
-func (u *Flashcard) ToJson() ([]byte, error) {
-	return json.Marshal(u)
+// func (m *User) ToModel(v any) error {
+// 	switch vType := v.(type) {
+// 	case postgresql.User:
+// 	// case mysql.User:
+// 	case rest.CreateUserRequest:
+// 	}
+// }
+
+func (m *Flashcard) ToJson() ([]byte, error) {
+	return json.Marshal(m)
 }
 
-func (u *Deck) ToJson() ([]byte, error) {
-	return json.Marshal(u)
+func (m *Deck) ToJson() ([]byte, error) {
+	return json.Marshal(m)
 }

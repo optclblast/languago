@@ -17,9 +17,9 @@ services:
       target: languago_back
     networks:
       - languago
-    depends_on:
-      database:
-        condition: service_healthy
+    # depends_on:
+    #   database:
+    #     condition: service_healthy
 
   database:
     image: postgres:15
@@ -29,7 +29,7 @@ services:
     environment:
       - PGUSER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=languago
+      - POSTGRES_DB=postgres
     volumes:
       - ./back/cfg/schemas/postgresql/pg.sql:/docker-entrypoint-initdb.d/init.sql
       - pg_languago:/var/lib/postgresql/data
@@ -39,10 +39,10 @@ services:
       - languago
     healthcheck:
       test: [ "CMD", "-U", "postgres", "pg_isready" ]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
-      start_period: 5s
+      retries: 10
+      start_period: 10s
 
 volumes:
   pg_languago:

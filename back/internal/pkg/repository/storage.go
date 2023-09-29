@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 
@@ -28,6 +27,7 @@ type (
 		Secret    string
 	}
 
+	// An interface to interact with repository
 	DatabaseInteractor interface {
 		Database() Storage
 		DDCredentials() DBCredentials
@@ -36,13 +36,6 @@ type (
 	databaseInteractor struct {
 		DB     Storage
 		DBCred DBCredentials
-	}
-
-	DBTX interface {
-		ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
-		PrepareContext(context.Context, string) (*sql.Stmt, error)
-		QueryContext(context.Context, string, ...interface{}) (*sql.Rows, error)
-		QueryRowContext(context.Context, string, ...interface{}) *sql.Row
 	}
 )
 

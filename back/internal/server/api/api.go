@@ -34,11 +34,53 @@ func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInter
 	}
 }
 func (api *API) routes() {
-	api.HandleFunc("/randomword", api.randomWordHandler()).Methods(http.MethodGet) // test
+	// Flashcards
+	// Returns an array of random words. For now, len(arr) == 1
+	// Example:
+	// [
+	// 	"hemps"
+	// ]
+	api.HandleFunc("/randomword", api.randomWordHandler()).Methods(http.MethodGet)
+
+	// Example: /flashcard?word=truck&deck_id=60dd7b63-cc25-4928-9229-41bed0f33bd3. This will retern you
+	// a flashcards included in the deck with id == "60dd7b63-cc25-4928-9229-41bed0f33bd3" and word
+	// parameter == "truck". If there are no such cards response will be 404.
 	api.HandleFunc("/flashcard", api.getFlashcardHandler()).Methods(http.MethodGet)
+
+	// Endpoint for creating new flashcards.
+	// Request body example:
+	// {
+	// 	  "native_lang": "ru",
+	// 	  "target_lang": "en",
+	// 	  "content": {
+	// 		  "word_in_native": "Слово",
+	// 		  "word_in_target": "Word",
+	// 		  "usage": ["Woooordsss"]
+	// 	  }
+	// }
+	// 200 if created successfully, 400 if body is invalid and 500 if there are any server-side issues
 	api.HandleFunc("/flashcard", api.newFlashcardHandler()).Methods(http.MethodPost)
-	api.HandleFunc("/flashcard", api.deleteFlashcardHandler()).Methods(http.MethodPost)
-	api.HandleFunc("/flashcard", api.editFlashcardHandler()).Methods(http.MethodPost)
+
+	// Endpoind for deleting flashcards. Request example:
+	// /flashcard?id=d33c0c35-6549-4978-bd6e-c8a22bbd2f6b
+	// If ^ is ok, then flashcard with id specified will be deleted.
+	api.HandleFunc("/flashcard", api.deleteFlashcardHandler()).Methods(http.MethodDelete)
+
+	// Endpoint for editing existing flashcards.
+	// Body example:
+	// {
+	// 	  "id":"d33c0c35-6549-4978-bd6e-c8a22bbd2f6b"
+	// 	  "word_in_native":"Cow"
+	// 	  "word_in_target":"Корова"
+	// 	  "usage":[
+	// 		  "Вот станет жарко, корова хвост поднимет и побежит.",
+	// 		  "Недалеко от места, где легла корова, протекал ручей, бравший начало из Кастальского ключа.",
+	// 		  "Треневы держали корову, и мой отец всегда спрашивал: \“Леночка, а чья будет корова, когда ты переедешь к нам?\” \“Ваша\”."
+	//     ]
+	// }
+	// Any of this fields may be empty, except "id" field.
+	api.HandleFunc("/flashcard", api.editFlashcardHandler()).Methods(http.MethodPut)
+
 }
 
 const (
@@ -112,13 +154,12 @@ func (a *API) newFlashcardHandler() http.HandlerFunc {
 	}
 }
 
-// TODO refactor this pls
 func (a *API) getFlashcardHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.URL.Query().Get("id")
 		deckId := r.URL.Query().Get("deck_id")
 		word := r.URL.Query().Get("word")
-		meaning := r.URL.Query().Get("word")
+		meaning := r.URL.Query().Get("meaning")
 
 		ctx, c := context.WithTimeout(context.Background(), 5*time.Second)
 		defer c()
@@ -136,6 +177,11 @@ func (a *API) getFlashcardHandler() http.HandlerFunc {
 			})
 			if err != nil {
 				a.responseError(w, err, http.StatusBadRequest)
+				return
+			}
+
+			if card == nil {
+				a.responseError(w, nil, http.StatusNotFound)
 				return
 			}
 
@@ -163,6 +209,11 @@ func (a *API) getFlashcardHandler() http.HandlerFunc {
 					return
 				}
 
+				if card == nil {
+					a.responseError(w, nil, http.StatusNotFound)
+					return
+				}
+
 				response.Flashcards = []*entities.Flashcard{card}
 				if err != nil {
 					a.responseError(w, fmt.Errorf("empty flashcard"), http.StatusBadRequest)
@@ -183,6 +234,11 @@ func (a *API) getFlashcardHandler() http.HandlerFunc {
 				})
 				if err != nil {
 					a.responseError(w, err, http.StatusBadRequest)
+					return
+				}
+
+				if card == nil {
+					a.responseError(w, nil, http.StatusNotFound)
 					return
 				}
 
