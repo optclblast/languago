@@ -14,12 +14,12 @@ services:
   back:
     build:
       context: ./back
-      target: languago_back
+      target: languago_builder
     networks:
       - languago
-    # depends_on:
-    #   database:
-    #     condition: service_healthy
+    depends_on:
+      database:
+        condition: service_started
 
   database:
     image: postgres:15

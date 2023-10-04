@@ -13,10 +13,10 @@ node:
 # db_driver can be "postgres" or "mysql".
 # db_user and db_secret - database login and password
 database: 
-  db_address: "languago_db:5432"
+  db_address: "localhost:5432"
   db_driver: "postgres"
   db_user: "postgres"
-  db_secret": "postgres"
+  db_secret: "postgres"
 
 # This block specifies the logger and its configuration.
 # logger can be "std" for standard golang log package, 
@@ -28,9 +28,9 @@ database:
 # If mode set to "std_only", logs will be displayed only in terminal.
 # urls - list of urls where logs will be sended. Format: <SERVICE=address:port>
 logger:
-  logger: "std"
+  logger: "zap"
   debug: true
-  output:
-    mode: std_only
-    urls: 
-      - GRAYLOG=localhost:7050
+  # output:
+  #   mode: std_only
+  #   urls: 
+  #     - GRAYLOG=localhost:7050

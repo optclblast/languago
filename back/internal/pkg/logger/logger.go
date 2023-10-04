@@ -95,8 +95,6 @@ func provideDefaultLogger(dbg bool) *DefaultLogger {
 		dbgMode: dbg,
 		log:     log.Default(),
 	}
-	logger.log.SetFlags(log.LstdFlags)
-	logger.log.Println("Error getting logger config. Default logger set.")
 	return &logger
 }
 

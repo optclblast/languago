@@ -50,7 +50,7 @@ func NewDatabaseInteractor(cfg abstractDatabaseConfig) (DatabaseInteractor, erro
 		return nil, fmt.Errorf("error initializing database interactor: %w", err)
 	}
 
-	var interactor *databaseInteractor
+	var interactor databaseInteractor
 	driver := cred.GetDriver()
 	if driver == "postgres" {
 		interactor.DB = newPGStorage(database)
@@ -61,7 +61,7 @@ func NewDatabaseInteractor(cfg abstractDatabaseConfig) (DatabaseInteractor, erro
 	}
 
 	interactor.DBCred = cred
-	return interactor, nil
+	return &interactor, nil
 }
 
 // TODO

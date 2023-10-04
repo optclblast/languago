@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"languago/internal/pkg/models/entities"
 	"languago/internal/pkg/repository/postgresql"
+	"log"
 
 	"github.com/google/uuid"
 )
@@ -49,9 +50,11 @@ func newPGStorage(db *sql.DB) *pgStorage {
 }
 
 func newMySQLStorage(db *sql.DB) *mysqlStorage {
-	return &mysqlStorage{
-		//db: mysql.New(db),
-	}
+	log.Println("IM NOT SUPPOSED TO BE HERE")
+	return nil
+	// return &mysqlStorage{
+	// 	db: mysql.New(db),
+	// }
 }
 
 // Storage implementation for PostgreSQL database
