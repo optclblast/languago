@@ -1,7 +1,7 @@
 package generators
 
 import (
-	"languago/pkg/logger"
+	"languago/internal/pkg/logger"
 	"math/rand"
 	"time"
 )

@@ -30,10 +30,11 @@ type (
 
 	Logger interface {
 		Warn(msg string, kv LogFields)
-		//Err(msg string, kv LogFields)
+		Error(msg string, kv LogFields)
 		Debug(msg string, kv LogFields)
 		Info(msg string, kv LogFields)
 		Log(msg string, kv LogFields)
+		Panic(msg string, kv LogFields)
 	}
 
 	LogFields map[string]interface{}

@@ -12,7 +12,7 @@ func (l *DefaultLogger) Warn(msg string, kv LogFields) {
 	l.log.SetPrefix(fmt.Sprintf("[WARN] %v", time.Now()))
 	l.log.Println(getStdFields(msg, kv)...)
 }
-func (l *DefaultLogger) Err(msg string, kv LogFields) {
+func (l *DefaultLogger) Error(msg string, kv LogFields) {
 	l.log.SetPrefix(fmt.Sprintf("[ERROR] %v", time.Now()))
 	l.log.Println(getStdFields(msg, kv)...)
 }

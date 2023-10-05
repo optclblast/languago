@@ -1,8 +1,8 @@
 package test
 
 import (
+	"languago/internal/pkg/logger"
 	"languago/internal/test/generators"
-	"languago/pkg/logger"
 	"testing"
 )
 

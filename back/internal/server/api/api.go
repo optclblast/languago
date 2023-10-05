@@ -39,6 +39,7 @@ func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInter
 	router.Use(mw.LoggingMiddleware)
 	router.Use(mw.AuthMiddleware)
 	router.Use(mw.RequestValidationMiddleware)
+	router.Use(mw.Recovery)
 
 	api.Router = router
 

@@ -15,6 +15,10 @@ func (l *LogrusWrapper) Debug(msg string, kv LogFields) {
 	l.log.WithFields(getLogrusFields(kv)).Debugln(msg)
 }
 
+func (l *LogrusWrapper) Error(msg string, kv LogFields) {
+	l.log.WithFields(getLogrusFields(kv)).Error(msg)
+}
+
 func (l *LogrusWrapper) Info(msg string, kv LogFields) {
 	l.log.WithFields(getLogrusFields(kv)).Infoln(msg)
 }

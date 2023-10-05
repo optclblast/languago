@@ -2,11 +2,13 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"languago/internal/pkg/closer"
 	"languago/internal/pkg/config"
 	"languago/internal/pkg/languagoerr"
 	"languago/internal/pkg/logger"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,7 +25,7 @@ type (
 	Service interface {
 		StartService(e chan error, closer chan closer.CloseFunc)
 		StopService() error
-		Ping() bool
+		Ping(ctx context.Context) error
 	}
 
 	node struct {
@@ -84,9 +86,36 @@ func (n *node) Stop() {
 
 func (n *node) Healthcheck() []error {
 	var errs []error
+	var respCh chan error = make(chan error, len(n.Services))
+	var wg sync.WaitGroup
+	defer close(respCh)
+
 	for name, s := range n.Services {
-		if ok := s.Ping(); !ok {
-			errs = append(errs, fmt.Errorf("error service %s is not ok.", name))
+		wg.Add(1)
+		go func(name string, s Service) {
+			defer wg.Done()
+
+			ctx, c := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
+			defer c()
+
+			err := s.Ping(ctx)
+			switch {
+			case err == nil:
+				return
+			case errors.Is(err, context.DeadlineExceeded):
+				respCh <- fmt.Errorf("error service %s is not responding.", name)
+			//case errors.Is(): TODO custom errors
+
+			default:
+				respCh <- fmt.Errorf("error service %s. unknown error", name)
+			}
+		}(name, s)
+	}
+
+	wg.Wait()
+	if len(respCh) > 0 {
+		for e := range respCh {
+			errs = append(errs, e)
 		}
 	}
 	return errs

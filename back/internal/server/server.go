@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"languago/internal/pkg/closer"
 	"languago/internal/pkg/config"
@@ -52,9 +53,9 @@ func (s *flashcardService) StopService() error {
 	return nil
 }
 
-func (s *flashcardService) Ping() bool {
+func (s *flashcardService) Ping(ctx context.Context) error {
 	// TODO
-	return true
+	return nil
 }
 
 func (s *flashcardService) listen(e chan error) {

@@ -15,6 +15,10 @@ func (l *ZapWrapper) Debug(msg string, kv LogFields) {
 	l.log.Debug(msg, getZapFields(kv)...)
 }
 
+func (l *ZapWrapper) Error(msg string, kv LogFields) {
+	l.log.Error(msg, getZapFields(kv)...)
+}
+
 func (l *ZapWrapper) Info(msg string, kv LogFields) {
 	l.log.Info(msg, getZapFields(kv)...)
 }

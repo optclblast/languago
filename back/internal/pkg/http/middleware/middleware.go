@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"encoding/json"
 	"languago/internal/pkg/logger"
 	"net/http"
 	"time"
@@ -46,6 +47,39 @@ func (m *middleware) LoggingMiddleware(next http.Handler) http.Handler {
 				"content_type": r.Header.Get("Content-Type"),
 			},
 		)
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (m *middleware) Recovery(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			err := recover()
+			if err != nil {
+				m.log.Warn("recovered from panic", logger.LogFields{
+					"datetime":     time.Now(),
+					"scheme":       r.URL.Scheme,
+					"method":       r.Method,
+					"path":         r.URL.Path,
+					"remote_addr":  r.RemoteAddr,
+					"host":         r.Host,
+					"user_agent":   r.UserAgent(),
+					"referer":      r.Referer(),
+					"request_id":   r.Header.Get("X-Request-ID"),
+					"content_type": r.Header.Get("Content-Type"),
+				},
+				)
+
+				jsonBody, _ := json.Marshal(map[string]string{
+					"error": "Internal server error",
+				})
+
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write(jsonBody)
+			}
+		}()
+
 		next.ServeHTTP(w, r)
 	})
 }

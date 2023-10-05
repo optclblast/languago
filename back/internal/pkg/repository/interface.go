@@ -77,7 +77,7 @@ func (s *pgStorage) UpdateFlashcard(ctx context.Context, arg UpdateFlashcardPara
 
 	currentFlashcardState, err := s.db.SelectFlashcardByID(ctx, arg.ID)
 	if err != nil {
-		return fmt.Errorf("error selecting flashcard: %w", err)
+		return fmt.Errorf("error selecting flashcard: %w", properError(err))
 	}
 
 	newVals := &postgresql.UpdateFlashcardParams{
@@ -100,7 +100,7 @@ func (s *pgStorage) UpdateFlashcard(ctx context.Context, arg UpdateFlashcardPara
 
 	err = s.db.UpdateFlashcard(ctx, *newVals)
 	if err != nil {
-		return fmt.Errorf("error updating flashcard: %w", err)
+		return fmt.Errorf("error updating flashcard: %w", properError(err))
 	}
 
 	return nil
