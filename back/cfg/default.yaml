@@ -1,0 +1,14 @@
+node: 
+  http_address: "localhost"
+  http_port: "3300"
+  rpc_address: ""
+  rpc_port: ""
+database: 
+  db_address: "localhost:5432"
+  db_driver: "postgres"
+  db_user: "postgres"
+  db_secret: "postgres"
+logger:
+  logger: "logrus"
+  debug: true
+  env: "local"

@@ -5,6 +5,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 type (
@@ -24,7 +25,7 @@ type (
 
 	LogrusWrapper struct {
 		dbgMode bool
-		log     *logrus.Entry
+		log     *logrus.Logger
 	}
 
 	Logger interface {
@@ -36,25 +37,105 @@ type (
 	}
 
 	LogFields map[string]interface{}
+
+	EnvParam string
 )
 
 const (
 	MessageField string = "message"
 	ErrorField   string = "error"
 	ContentField string = "content"
+	////////////////////////////////
+	EnvParam_LOCAL       EnvParam = "local"
+	EnvParam_DEVELOPMENT EnvParam = "development"
+	EnvParam_PRODUCTION  EnvParam = "production"
 )
 
-func NewLogrusWrapper(dbg bool) *LogrusWrapper {
-	return &LogrusWrapper{
-		dbgMode: dbg,
-		log:     logrus.NewEntry(logrus.New()),
+func MustToEnvParam(raw string) EnvParam {
+	switch {
+	case raw == "local":
+		return EnvParam_LOCAL
+	case raw == "development":
+		return EnvParam_DEVELOPMENT
+	case raw == "production":
+		return EnvParam_PRODUCTION
+	default:
+		log.Fatalln("fatal error: invalid env parameter")
 	}
+	return EnvParam_LOCAL
 }
 
-func NewZapWrapper(dbg bool) *ZapWrapper {
+func NewLogrusWrapper(dbg bool, env EnvParam) *LogrusWrapper {
+	var llog *logrus.Logger
+
+	// TODO graylog output
+	// llog.SetOutput()
+	switch env {
+	case EnvParam_LOCAL:
+		llog = logrus.StandardLogger()
+		llog.Formatter = &logrus.TextFormatter{
+			ForceColors:      true,
+			QuoteEmptyFields: true,
+		}
+		llog.SetLevel(logrus.DebugLevel)
+	case EnvParam_DEVELOPMENT:
+		llog = logrus.New()
+		llog.Formatter = &logrus.JSONFormatter{
+			DisableHTMLEscape: true,
+			PrettyPrint:       true,
+		}
+		llog.SetLevel(logrus.DebugLevel)
+	case EnvParam_PRODUCTION:
+		llog = logrus.New()
+		llog.Formatter = &logrus.JSONFormatter{
+			DisableHTMLEscape: true,
+		}
+		llog.SetLevel(logrus.InfoLevel)
+	default:
+		log.Fatalln("fatal error: invalid env parameter")
+	}
+
+	lw := &LogrusWrapper{
+		dbgMode: dbg,
+		log:     llog,
+	}
+	return lw
+}
+
+func NewZapWrapper(dbg bool, env EnvParam) *ZapWrapper {
+	var (
+		opts []zap.Option = make([]zap.Option, 0)
+		zlog *zap.Logger
+	)
+
+	switch env {
+	case EnvParam_LOCAL:
+		opts = append(opts,
+			zap.Development(),
+			zap.WithCaller(true),
+			zap.WithClock(zapcore.DefaultClock),
+		)
+		zlog = zap.Must(zap.NewDevelopment(opts...))
+	case EnvParam_DEVELOPMENT:
+		opts = append(opts,
+			zap.Development(),
+			zap.WithCaller(true),
+			zap.WithClock(zapcore.DefaultClock),
+		)
+		zlog = zap.Must(zap.NewProduction(opts...))
+	case EnvParam_PRODUCTION:
+		opts = append(opts,
+			zap.WithClock(zapcore.DefaultClock),
+			zap.IncreaseLevel(zapcore.InfoLevel),
+		)
+		zlog = zap.Must(zap.NewProduction(opts...))
+	default:
+		log.Fatalln("fatal error: invalid env parameter")
+	}
+
 	return &ZapWrapper{
 		dbgMode: dbg,
-		log:     zap.Must(zap.NewProduction()),
+		log:     zlog,
 	}
 }
 
@@ -72,22 +153,6 @@ func ProvideLogger(cfg abstractLoggerConfig) Logger {
 		return provideDefaultLogger(false)
 	}
 	return logger
-}
-
-func WithPrefix(log Logger, kv ...string) Logger {
-	entry := log.(*LogrusWrapper).log
-
-	if len(kv) == 1 {
-		entry = entry.WithField("module", kv[0])
-	} else if len(kv)%2 == 0 {
-		for i := 0; i < len(kv); i += 2 {
-			entry = entry.WithField(kv[i], kv[i+1])
-		}
-	}
-
-	return &LogrusWrapper{
-		log: entry,
-	}
 }
 
 func provideDefaultLogger(dbg bool) *DefaultLogger {

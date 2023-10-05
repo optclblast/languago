@@ -24,11 +24,13 @@ database:
 # Set debug true if you want to see .Debug messages in 
 # output. 
 # Output block specifies the output parameters. 
+# env can be "local", "development", or "production".
 # mode can be "std_only", "external_only" or "multi_logging".
 # If mode set to "std_only", logs will be displayed only in terminal.
 # urls - list of urls where logs will be sended. Format: <SERVICE=address:port>
 logger:
   logger: "zap"
+  env: "local"
   debug: true
   # output:
   #   mode: std_only

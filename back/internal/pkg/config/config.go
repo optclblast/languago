@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"languago/internal/pkg/logger"
 	"languago/internal/pkg/repository"
+	"log"
 	"os"
 
 	"github.com/spf13/viper"
@@ -64,12 +65,15 @@ func InitialConfiguration() AbstractConfig {
 		LoggerCfg:   &LoggerConfig{},
 	}
 	CONFIG_DIR := os.Getenv("LANGUAGO_CONFIG_DIR")
+	var CONFIG_FILE string = "general.yaml"
 	if CONFIG_DIR == "" {
-		panic("LANGUAGO_CONFIG_DIR env variable required!")
+		log.Println("LANGUAGO_CONFIG_DIR not provided, trying to use default configuration directory")
+		CONFIG_DIR = "./cfg/"
+		CONFIG_FILE = "default.yaml"
 	}
 
 	viper.SetConfigType("yaml")
-	yamlCfg, err := os.ReadFile(CONFIG_DIR + "general.yaml")
+	yamlCfg, err := os.ReadFile(CONFIG_DIR + CONFIG_FILE)
 	if err != nil {
 		panic("error reading config file: " + err.Error())
 	}
@@ -92,16 +96,17 @@ func InitialConfiguration() AbstractConfig {
 	config.NodeCfg.RPCPort = nodeRaw["rpc_port"]
 
 	logRaw := viper.GetStringMapString("logger")
+	var envValue logger.EnvParam = logger.MustToEnvParam(viper.GetString("logger.env"))
 
 	switch logRaw["logger"] {
 	case "logrus":
-		config.LoggerCfg.Logger = logger.NewLogrusWrapper(viper.GetBool("logger.debug"))
+		config.LoggerCfg.Logger = logger.NewLogrusWrapper(viper.GetBool("logger.debug"), envValue)
 	case "zap":
-		config.LoggerCfg.Logger = logger.NewZapWrapper(viper.GetBool("logger.debug"))
+		config.LoggerCfg.Logger = logger.NewZapWrapper(viper.GetBool("logger.debug"), envValue)
 	case "std":
 		config.LoggerCfg.Logger = logger.NewDefaultLogger(viper.GetBool("logger.debug"))
 	default:
-		config.LoggerCfg.Logger = logger.NewZapWrapper(viper.GetBool("logger.debug"))
+		config.LoggerCfg.Logger = logger.NewZapWrapper(viper.GetBool("logger.debug"), envValue)
 	}
 
 	return &config

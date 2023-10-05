@@ -1,8 +1,8 @@
 package test
 
 import (
-	"languago/internal/pkg/logger"
 	"languago/internal/test/generators"
+	"languago/pkg/logger"
 	"testing"
 )
 
@@ -21,7 +21,7 @@ func TestLoggers(t *testing.T) {
 
 	// zap
 
-	log2 := logger.NewZapWrapper(dbg)
+	log2 := logger.NewZapWrapper(dbg, logger.EnvParam_LOCAL)
 
 	log2.Debug("ZAP DEBUG", generators.NewPairs())
 	//log.Err("ZAP ERR", generators.NewPairs())
@@ -31,7 +31,7 @@ func TestLoggers(t *testing.T) {
 
 	// logrus
 
-	log3 := logger.NewLogrusWrapper(dbg)
+	log3 := logger.NewLogrusWrapper(dbg, logger.EnvParam_LOCAL)
 
 	log3.Debug("LOGRUS DEBUG", generators.NewPairs())
 	//log.Err("LOGRUS ERR", generators.NewPairs())
@@ -44,7 +44,7 @@ func TestLoggers(t *testing.T) {
 func TestLogrus(t *testing.T) {
 	var dbg bool = true
 
-	log3 := logger.NewLogrusWrapper(dbg)
+	log3 := logger.NewLogrusWrapper(dbg, logger.EnvParam_LOCAL)
 
 	log3.Debug("LOGRUS DEBUG", generators.NewPairs())
 	//log.Err("LOGRUS ERR", generators.NewPairs())
@@ -57,7 +57,7 @@ func TestLogrus(t *testing.T) {
 func TestZap(t *testing.T) {
 	var dbg bool = true
 
-	log2 := logger.NewZapWrapper(dbg)
+	log2 := logger.NewZapWrapper(dbg, logger.EnvParam_LOCAL)
 
 	log2.Debug("ZAP DEBUG", generators.NewPairs())
 	//log.Err("ZAP ERR", generators.NewPairs())

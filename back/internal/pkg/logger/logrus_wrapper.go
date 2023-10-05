@@ -5,34 +5,33 @@ import (
 )
 
 func (l *LogrusWrapper) Warn(msg string, kv LogFields) {
-	l.log.Warnln(getFields(msg, kv)...)
+	l.log.WithFields(getLogrusFields(kv)).Warnln(msg)
 }
 
 func (l *LogrusWrapper) Debug(msg string, kv LogFields) {
 	if !l.dbgMode {
 		return
 	}
-	l.log.Debugln(getFields(msg, kv)...)
+	l.log.WithFields(getLogrusFields(kv)).Debugln(msg)
 }
 
 func (l *LogrusWrapper) Info(msg string, kv LogFields) {
-	l.log.Infoln(getFields(msg, kv)...)
+	l.log.WithFields(getLogrusFields(kv)).Infoln(msg)
 }
 
 func (l *LogrusWrapper) Log(msg string, kv LogFields) {
-	l.log.Logln(logrus.InfoLevel, getFields(msg, kv)...)
+	l.log.WithFields(getLogrusFields(kv)).Log(logrus.DebugLevel, msg)
 }
 
 func (l *LogrusWrapper) Panic(msg string, kv LogFields) {
-	l.log.Panic(getFields(msg, kv)...)
+	l.log.WithFields(getLogrusFields(kv)).Panic(msg)
 }
 
-func getFields(msg string, kv LogFields) []interface{} {
-	var f []interface{}
-	f = append(f, msg)
+func getLogrusFields(kv LogFields) logrus.Fields {
+	var fields logrus.Fields = make(logrus.Fields, len(kv))
+
 	for k, v := range kv {
-		f = append(f, k)
-		f = append(f, v)
+		fields[k] = v
 	}
-	return f
+	return fields
 }

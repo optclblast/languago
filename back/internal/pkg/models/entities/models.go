@@ -2,8 +2,8 @@ package entities
 
 import (
 	"encoding/json"
-	// "languago/internal/pkg/models/requests/rest"
-	// "languago/internal/pkg/repository/postgresql"
+	// "languago/pkg/models/requests/rest"
+	// "languago/pkg/repository/postgresql"
 
 	"github.com/google/uuid"
 )

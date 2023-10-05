@@ -1,7 +1,7 @@
 run:
 	cd back && \
 	go mod tidy && \
-	LANGUAGO_CONFIG_DIR="./cfg/" go run main.go
+	LANGUAGO_CONFIG_DIR="./cfg/" go run ./cmd/main.go
 
 build:
 	cd back && \

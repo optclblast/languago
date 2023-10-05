@@ -25,8 +25,9 @@ func main() {
 func start(ctx context.Context) error {
 	cfg := config.InitialConfiguration()
 
-	svs := make(map[string]server.Service)
-	svs["flashcard_service"] = server.NewService(cfg)
+	svs := map[string]server.Service{
+		"flashcard_service": server.NewService(cfg),
+	}
 
 	node, err := server.NewNode(&server.NewNodeParams{
 		Services: svs,

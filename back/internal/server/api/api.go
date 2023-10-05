@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"languago/internal/pkg/config"
+	"languago/internal/pkg/http/middleware"
 	"languago/internal/pkg/logger"
 	"languago/internal/pkg/models/entities"
 	"languago/internal/pkg/models/requests/rest"
@@ -27,12 +28,23 @@ type (
 )
 
 func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInteractor) *API {
-	return &API{
-		Router: mux.NewRouter(),
-		Repo:   interactor,
-		log:    logger.ProvideLogger(cfg),
+	api := API{
+		Repo: interactor,
+		log:  logger.ProvideLogger(cfg),
 	}
+
+	router := mux.NewRouter()
+
+	mw := middleware.NewMiddleware(api.log)
+	router.Use(mw.LoggingMiddleware)
+	router.Use(mw.AuthMiddleware)
+	router.Use(mw.RequestValidationMiddleware)
+
+	api.Router = router
+
+	return &api
 }
+
 func (api *API) routes() {
 	// Flashcards
 	// Returns an array of random words. For now, len(arr) == 1
