@@ -17,7 +17,7 @@ type closer struct {
 	closeFuncs []CloseFunc
 }
 
-type CloseFunc func(ctx context.Context) error
+type CloseFunc func() error
 
 func NewCloser() Closer {
 	return &closer{
@@ -37,7 +37,7 @@ func (c *closer) Close(ctx context.Context) error {
 
 	go func() {
 		for _, f := range c.closeFuncs {
-			if err := f(ctx); err != nil {
+			if err := f(); err != nil {
 				msgs = append(msgs, err.Error())
 			}
 		}
@@ -55,6 +55,7 @@ func (c *closer) Close(ctx context.Context) error {
 		return fmt.Errorf("error shutdown error(s): \n%s",
 			strings.Join(msgs, "\n"))
 	}
+
 	return nil
 }
 

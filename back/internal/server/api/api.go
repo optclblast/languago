@@ -21,9 +21,9 @@ import (
 type (
 	API struct {
 		*mux.Router
-		AuthProvider *Authorizer
-		Repo         repository.DatabaseInteractor
-		log          logger.Logger
+		Repo repository.DatabaseInteractor
+		log  logger.Logger
+		stop chan struct{}
 	}
 )
 
@@ -31,11 +31,13 @@ func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInter
 	api := API{
 		Repo: interactor,
 		log:  logger.ProvideLogger(cfg),
+		stop: make(chan struct{}),
 	}
 
 	router := mux.NewRouter()
 
-	mw := middleware.NewMiddleware(api.log)
+	mw := middleware.NewMiddleware(api.log, api.stop)
+	router.Use(mw.Close)
 	router.Use(mw.LoggingMiddleware)
 	router.Use(mw.AuthMiddleware)
 	router.Use(mw.RequestValidationMiddleware)
@@ -44,6 +46,11 @@ func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInter
 	api.Router = router
 
 	return &api
+}
+
+func (a *API) Stop() {
+	a.log.Warn("closing api", logger.LogFieldPair("time", time.Now()))
+	a.stop <- struct{}{}
 }
 
 func (api *API) routes() {

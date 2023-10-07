@@ -14,6 +14,10 @@ import (
 type (
 	// Storage interface provides an abstraction over particular database used by node
 	Storage interface {
+		// Ping func
+		PingDB() error
+		Close() error
+
 		CreateUser(ctx context.Context, arg CreateUserParams) error
 		UpdateUser(ctx context.Context, arg UpdateUserParams) error
 		DeleteUser(ctx context.Context, userID uuid.UUID) error
@@ -36,17 +40,22 @@ type (
 
 	// PostgreSQL interactor
 	pgStorage struct {
-		db *postgresql.Queries
+		conn *sql.DB
+		db   *postgresql.Queries
 	}
 
 	// MySQL interactor
 	mysqlStorage struct {
+		conn *sql.DB
 		//db *mysql.Queries
 	}
 )
 
 func newPGStorage(db *sql.DB) *pgStorage {
-	return &pgStorage{db: postgresql.New(db)}
+	return &pgStorage{
+		conn: db,
+		db:   postgresql.New(db),
+	}
 }
 
 func newMySQLStorage(db *sql.DB) *mysqlStorage {
@@ -58,6 +67,18 @@ func newMySQLStorage(db *sql.DB) *mysqlStorage {
 }
 
 // Storage implementation for PostgreSQL database
+func (s *pgStorage) PingDB() error {
+	if err := s.conn.Ping(); err != nil {
+		s.conn.Close()
+		return fmt.Errorf("error pinging database: %w", err)
+	}
+	return nil
+}
+
+func (s *pgStorage) Close() error {
+	return s.conn.Close()
+}
+
 func (s *pgStorage) CreateUser(ctx context.Context, arg CreateUserParams) error { return nil }
 func (s *pgStorage) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
 	return nil
@@ -126,6 +147,18 @@ func (s *pgStorage) SelectFromDeck(ctx context.Context, arg SelectFromDeckParams
 }
 
 // Storage implementation for MySQL database
+func (s *mysqlStorage) PingDB() error {
+	if err := s.conn.Ping(); err != nil {
+		s.conn.Close()
+		return fmt.Errorf("error pinging database: %w", err)
+	}
+	return nil
+}
+
+func (s *mysqlStorage) Close() error {
+	return s.conn.Close()
+}
+
 func (s *mysqlStorage) CreateUser(ctx context.Context, arg CreateUserParams) error { return nil }
 func (s *mysqlStorage) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
 	return nil

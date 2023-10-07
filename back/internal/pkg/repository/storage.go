@@ -1,8 +1,10 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	_ "github.com/lib/pq"
 )
@@ -30,6 +32,7 @@ type (
 	// An interface to interact with repository
 	DatabaseInteractor interface {
 		Database() Storage
+		CloseConnection() error
 		DDCredentials() DBCredentials
 	}
 
@@ -134,4 +137,24 @@ func (d *databaseInteractor) Database() Storage {
 
 func (d *databaseInteractor) DDCredentials() DBCredentials {
 	return d.DBCred
+}
+
+func (d *databaseInteractor) CloseConnection() error {
+	var err error
+
+	ctx, timeoutCloser := context.WithTimeout(context.Background(), 15*time.Second)
+	defer timeoutCloser()
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	go func() {
+		time.Sleep(30 * time.Second)
+		err = fmt.Errorf("error closing connection to database. Aborting closer due to timeout")
+		cancel()
+	}()
+
+	err = d.DB.Close()
+
+	return err
 }

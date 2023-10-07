@@ -9,6 +9,6 @@ database:
   db_user: "postgres"
   db_secret: "postgres"
 logger:
-  logger: "logrus"
+  logger: "zap"
   debug: true
   env: "local"

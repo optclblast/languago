@@ -8,13 +8,17 @@ import (
 )
 
 type middleware struct {
-	log logger.Logger
+	log    logger.Logger
+	closed bool
 }
 
-func NewMiddleware(log logger.Logger) *middleware {
-	return &middleware{
+func NewMiddleware(log logger.Logger, closer chan struct{}) *middleware {
+	mw := &middleware{
 		log: log,
 	}
+	go mw.closer(closer)
+
+	return mw
 }
 
 func (m *middleware) AuthMiddleware(next http.Handler) http.Handler {
@@ -82,4 +86,20 @@ func (m *middleware) Recovery(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (m *middleware) Close(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if m.closed {
+			w.WriteHeader(int(http.StateClosed))
+			w.Write([]byte("Closed"))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (m *middleware) closer(c chan struct{}) {
+	<-c
+	m.closed = true
 }

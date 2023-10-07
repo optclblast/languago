@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"languago/internal/pkg/closer"
 	"languago/internal/pkg/config"
-	"languago/internal/pkg/languagoerr"
 	"languago/internal/pkg/logger"
+	"log"
 	"sync"
 	"time"
 
@@ -16,15 +16,18 @@ import (
 
 type (
 	Node interface {
+		ID() uuid.UUID
 		Run()
-		Stop()
+		Stop(ctx context.Context)
 		Healthcheck() []error
 		SetConfig(cfg config.AbstractNodeConfig)
+		ServiceBuilder(cfg config.AbstractConfig)
+		Log() logger.Logger
 	}
 
 	Service interface {
 		StartService(e chan error, closer chan closer.CloseFunc)
-		StopService() error
+		GracefulStop() error
 		Ping(ctx context.Context) error
 	}
 
@@ -34,27 +37,39 @@ type (
 		Logger   logger.Logger
 		Services map[string]Service
 		ErrorCh  chan error
-		StopCh   chan struct{}
 		closer   closer.Closer
 		closerCh chan closer.CloseFunc
 	}
 
 	StopFunc func(n Node) error
 
+	Services map[string]Service
+
 	NewNodeParams struct {
-		Services  map[string]Service
+		Services  Services
 		StopFuncs []StopFunc
 		Logger    logger.Logger
 		Closer    closer.Closer
 	}
 )
 
+func (n *node) ServiceBuilder(cfg config.AbstractConfig) {
+	// just for now
+	svc := map[string]Service{
+		"flashcard_service": NewService(cfg),
+	}
+	for _, s := range svc {
+		n.closer.Add(func() error {
+			return s.GracefulStop()
+		})
+	}
+
+	n.Services = svc
+}
+
 func NewNode(args *NewNodeParams) (Node, error) {
 	if args == nil {
-		return nil, fmt.Errorf("error NewNodeParams are required.")
-	}
-	if len(args.Services) == 0 {
-		return nil, fmt.Errorf("error no services provided.")
+		panic("error NewNodeParams are required.")
 	}
 
 	return &node{
@@ -62,25 +77,25 @@ func NewNode(args *NewNodeParams) (Node, error) {
 		Logger:   args.Logger,
 		Services: args.Services,
 		closer:   args.Closer,
-		closerCh: make(chan closer.CloseFunc),
 	}, nil
 }
 
 func (n *node) Run() {
-	go n.errorHandler()
+	n.Logger.Info("starting the node services",
+		logger.LogFields{
+			"node_id":       n.Id.String(),
+			"node_services": n.Services,
+		},
+	)
+
 	for name, s := range n.Services {
+		log.Println(name, " starting")
 		s.StartService(n.ErrorCh, n.closerCh)
 		n.Logger.Info(fmt.Sprintf("service %s successfully started", name), nil)
 	}
-	<-n.StopCh
 }
 
-func (n *node) Stop() {
-	ctx, cancel := context.WithDeadline(
-		context.Background(),
-		time.Now().Add(10*time.Second),
-	)
-	defer cancel()
+func (n *node) Stop(ctx context.Context) {
 	n.closer.Close(ctx)
 }
 
@@ -104,10 +119,12 @@ func (n *node) Healthcheck() []error {
 				return
 			case errors.Is(err, context.DeadlineExceeded):
 				respCh <- fmt.Errorf("error service %s is not responding.", name)
+				return
 			//case errors.Is(): TODO custom errors
 
 			default:
 				respCh <- fmt.Errorf("error service %s. unknown error", name)
+				return
 			}
 		}(name, s)
 	}
@@ -121,18 +138,10 @@ func (n *node) Healthcheck() []error {
 	return errs
 }
 
+func (n *node) ID() uuid.UUID { return n.Id }
+
 func (n *node) SetConfig(cfg config.AbstractNodeConfig) {
 	n.config = cfg
 }
 
-func (n *node) errorHandler() {
-	for {
-		err := <-n.ErrorCh
-		if _, ok := err.(*languagoerr.FatalErr); ok {
-			n.Logger.Warn("fatal service error: ", logger.LogFieldPair(logger.ErrorField, <-n.ErrorCh))
-			// TODO restart service handler, like this -> n.RestartService() or sthg
-			continue
-		}
-		n.Logger.Info("error: ", logger.LogFieldPair(logger.ErrorField, <-n.ErrorCh))
-	}
-}
+func (n *node) Log() logger.Logger { return n.Logger }
