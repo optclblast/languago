@@ -7,11 +7,14 @@ RUN curl -OL https://golang.org/dl/go1.21.1.linux-amd64.tar.gz && \
 ENV LANGUAGO_CONFIG_DIR=/app/cfg/
 
 RUN mkdir /app
+RUN mkdir /app/build
 WORKDIR /app
 COPY . .
 
-RUN /usr/local/go/bin/go mod tidy && \
-    /usr/local/go/bin/go build -o build/languago_main -buildmode=default && \
-    chmod +x ./build/languago_main
+RUN /usr/local/go/bin/go mod tidy 
+RUN cd cmd && /usr/local/go/bin/go build -o /app/build/languago_main -buildmode=default
+RUN chmod +x ./build/languago_main
+
+EXPOSE 3300
 
 CMD [ "./build/languago_main" ]

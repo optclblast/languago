@@ -54,6 +54,7 @@ func (a *API) Stop() {
 }
 
 func (api *API) routes() {
+	api.HandleFunc("/", api.rootHandler()).Methods(http.MethodGet)
 	// Flashcards
 	// Returns an array of random words. For now, len(arr) == 1
 	// Example:
@@ -118,6 +119,12 @@ const (
 func (a *API) Init() {
 	a.routes()
 	a.log.Info("api initialized", nil)
+}
+
+func (a *API) rootHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello, world!"))
+	}
 }
 
 func (a *API) randomWordHandler() http.HandlerFunc {
