@@ -1,0 +1,5 @@
+http://127.0.0.1:80 {
+	reverse_proxy backend:3300 {
+		header_up X-Real-IP {remote_host}
+	}
+}

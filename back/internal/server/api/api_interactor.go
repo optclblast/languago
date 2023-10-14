@@ -8,7 +8,7 @@ import (
 	"net/http"
 )
 
-func (a *API) responseError(w http.ResponseWriter, e error, code int) error {
+func (a *FlashcardAPI) responseError(w http.ResponseWriter, e error, code int) error {
 	a.log.Warn(logger.ErrorField, logger.LogFieldPair(logger.ErrorField, e))
 	resp := rest.NewFlashcardResponse{
 		Errors: []string{e.Error()},

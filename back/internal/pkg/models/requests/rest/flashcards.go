@@ -32,6 +32,11 @@ type (
 		Login    string `json:"login"`
 		Password string `json:"password"`
 	}
+
+	NewClassRequest struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
 )
 
 // TODO grammar cards
