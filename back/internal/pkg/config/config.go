@@ -60,9 +60,9 @@ type (
 
 func InitialConfiguration() AbstractConfig {
 	var config Config = Config{
-		DatabaseCfg: &DatabaseConfig{},
-		NodeCfg:     &NodeConfig{},
-		LoggerCfg:   &LoggerConfig{},
+		DatabaseCfg: new(DatabaseConfig),
+		NodeCfg:     new(NodeConfig),
+		LoggerCfg:   new(LoggerConfig),
 	}
 	CONFIG_DIR := os.Getenv("LANGUAGO_CONFIG_DIR")
 	var CONFIG_FILE string = "general.yaml"
