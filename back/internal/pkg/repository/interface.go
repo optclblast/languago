@@ -3,10 +3,11 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	errors2 "languago/internal/pkg/errors"
 	"languago/internal/pkg/models/entities"
 	"languago/internal/pkg/repository/postgresql"
-	"log"
 
 	"github.com/google/uuid"
 )
@@ -26,7 +27,7 @@ type (
 		CreateFlashcard(ctx context.Context, arg CreateFlashcardParams) error
 		UpdateFlashcard(ctx context.Context, arg UpdateFlashcardParams) error
 		DeleteFlashcard(ctx context.Context, cardID uuid.UUID) error
-		SelectFlashcard(ctx context.Context, arg SelectFlashcardParams) (*entities.Flashcard, error)
+		SelectFlashcard(ctx context.Context, arg SelectFlashcardParams) ([]*entities.Flashcard, error)
 
 		CreateDeck(ctx context.Context, arg CreateDeckParams) error
 		UpdateDeck(ctx context.Context, arg UpdateDeckParams) error
@@ -38,19 +39,18 @@ type (
 		SelectFromDeck(ctx context.Context, arg SelectFromDeckParams) (*entities.Flashcard, error)
 	}
 
-	// PostgreSQL interactor
 	pgStorage struct {
 		conn *sql.DB
 		db   *postgresql.Queries
 	}
 
-	// MySQL interactor
 	mysqlStorage struct {
 		conn *sql.DB
 		//db *mysql.Queries
 	}
 )
 
+// Storage implementation for PostgreSQL database
 func newPGStorage(db *sql.DB) *pgStorage {
 	return &pgStorage{
 		conn: db,
@@ -59,17 +59,14 @@ func newPGStorage(db *sql.DB) *pgStorage {
 }
 
 func newMySQLStorage(db *sql.DB) *mysqlStorage {
-	log.Println("IM NOT SUPPOSED TO BE HERE")
 	return nil
 	// return &mysqlStorage{
 	// 	db: mysql.New(db),
 	// }
 }
 
-// Storage implementation for PostgreSQL database
 func (s *pgStorage) PingDB() error {
 	if err := s.conn.Ping(); err != nil {
-		s.conn.Close()
 		return fmt.Errorf("error pinging database: %w", err)
 	}
 	return nil
@@ -79,18 +76,89 @@ func (s *pgStorage) Close() error {
 	return s.conn.Close()
 }
 
-func (s *pgStorage) CreateUser(ctx context.Context, arg CreateUserParams) error { return nil }
-func (s *pgStorage) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
+func (s *pgStorage) CreateUser(ctx context.Context, arg CreateUserParams) error {
+	if len(arg.Login) < 4 && arg.Password == "" {
+		return fmt.Errorf("error invalid user credentials: %w", ErrInvalidData)
+	}
+
+	err := s.db.CreateUser(ctx, postgresql.CreateUserParams{
+		ID:       arg.ID,
+		Login:    sql.NullString{String: arg.Login, Valid: true},
+		Password: sql.NullString{String: arg.Password, Valid: true},
+	})
+	if err != nil {
+		return fmt.Errorf("error create user: %w", err)
+	}
+
 	return nil
 }
-func (s *pgStorage) DeleteUser(ctx context.Context, userID uuid.UUID) error { return nil }
+
+func (s *pgStorage) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
+	if arg.ID == uuid.Nil {
+		return fmt.Errorf("error user id is required")
+	}
+
+	if arg.Login != "" {
+		_, err := s.db.UpdateUserLogin(ctx, postgresql.UpdateUserLoginParams{
+			ID:    arg.ID,
+			Login: sql.NullString{String: arg.Login, Valid: true},
+		})
+		if err != nil {
+			return fmt.Errorf("error update user login: %w", err)
+		}
+	}
+
+	if arg.Password != "" {
+		err := s.db.UpdateUserPassword(ctx, postgresql.UpdateUserPasswordParams{
+			ID:       arg.ID,
+			Password: sql.NullString{String: arg.Login, Valid: true},
+		})
+		if err != nil {
+			return fmt.Errorf("error update user login: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *pgStorage) DeleteUser(ctx context.Context, userID uuid.UUID) error {
+	if userID == uuid.Nil {
+		return fmt.Errorf("error user id is required")
+	}
+
+	err := s.db.DeleteUser(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("error delete user: %w", err)
+	}
+
+	return nil
+}
+
 func (s *pgStorage) SelectUser(ctx context.Context, arg SelectUserParams) (*entities.User, error) {
-	return nil, nil
+	var user postgresql.User
+	var err error
+
+	if arg.ID != uuid.Nil {
+		user, err = s.db.SelectUserByID(ctx, arg.ID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, errors2.ErrNotFound
+			}
+		}
+	} else if arg.Login != "" {
+		user, err = s.db.SelectUserByLogin(ctx, sql.NullString{String: arg.Login, Valid: true})
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, errors2.ErrNotFound
+			}
+		}
+	}
+
+	return entities.UserFromPG(user), nil
 }
 
 func (s *pgStorage) CreateFlashcard(ctx context.Context, arg CreateFlashcardParams) error { return nil }
 
-// Updated the flashcard record. ID must be not nil.
 func (s *pgStorage) UpdateFlashcard(ctx context.Context, arg UpdateFlashcardParams) error {
 	if arg.ID == uuid.Nil {
 		return fmt.Errorf("error id required")
@@ -98,7 +166,11 @@ func (s *pgStorage) UpdateFlashcard(ctx context.Context, arg UpdateFlashcardPara
 
 	currentFlashcardState, err := s.db.SelectFlashcardByID(ctx, arg.ID)
 	if err != nil {
-		return fmt.Errorf("error selecting flashcard: %w", properError(err))
+		if errors.Is(err, sql.ErrNoRows) {
+			return errors2.ErrNotFound
+		}
+
+		return fmt.Errorf("error selecting flashcard: %w", handleError(err))
 	}
 
 	newVals := &postgresql.UpdateFlashcardParams{
@@ -121,13 +193,25 @@ func (s *pgStorage) UpdateFlashcard(ctx context.Context, arg UpdateFlashcardPara
 
 	err = s.db.UpdateFlashcard(ctx, *newVals)
 	if err != nil {
-		return fmt.Errorf("error updating flashcard: %w", properError(err))
+		return fmt.Errorf("error updating flashcard: %w", handleError(err))
 	}
 
 	return nil
 }
-func (s *pgStorage) DeleteFlashcard(ctx context.Context, cardID uuid.UUID) error { return nil }
-func (s *pgStorage) SelectFlashcard(ctx context.Context, arg SelectFlashcardParams) (*entities.Flashcard, error) {
+func (s *pgStorage) DeleteFlashcard(ctx context.Context, cardID uuid.UUID) error {
+	if cardID == uuid.Nil {
+		return fmt.Errorf("error flashcard uuid is required")
+	}
+
+	err := s.db.DeleteFlashcard(ctx, cardID)
+	if err != nil {
+		return fmt.Errorf("error delete flashcard: %w", err)
+	}
+
+	return nil
+}
+func (s *pgStorage) SelectFlashcard(ctx context.Context, arg SelectFlashcardParams) ([]*entities.Flashcard, error) {
+
 	return nil, nil
 }
 
@@ -209,7 +293,7 @@ func (s *mysqlStorage) UpdateFlashcard(ctx context.Context, arg UpdateFlashcardP
 	return nil
 }
 func (s *mysqlStorage) DeleteFlashcard(ctx context.Context, cardID uuid.UUID) error { return nil }
-func (s *mysqlStorage) SelectFlashcard(ctx context.Context, arg SelectFlashcardParams) (*entities.Flashcard, error) {
+func (s *mysqlStorage) SelectFlashcard(ctx context.Context, arg SelectFlashcardParams) ([]*entities.Flashcard, error) {
 	return nil, nil
 }
 

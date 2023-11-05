@@ -2,6 +2,8 @@ package entities
 
 import (
 	"encoding/json"
+	"languago/internal/pkg/repository/postgresql"
+
 	// "languago/pkg/models/requests/rest"
 	// "languago/pkg/repository/postgresql"
 
@@ -10,9 +12,9 @@ import (
 
 type (
 	User struct {
-		Id       uuid.UUID `json:id`
-		Login    string    `json:login`
-		Password string    `json:password`
+		Id       uuid.UUID `json:"id"`
+		Login    string    `json:"login"`
+		Password string    `json:"password"`
 	}
 
 	Flashcard struct {
@@ -24,9 +26,9 @@ type (
 	}
 
 	Deck struct {
-		Id    string    `json:id`
-		Name  string    `json:name`
-		Owner uuid.UUID `json:owner`
+		Id    string    `json:"id"`
+		Name  string    `json:"name"`
+		Owner uuid.UUID `json:"owner"`
 	}
 )
 
@@ -48,4 +50,12 @@ func (m *Flashcard) ToJson() ([]byte, error) {
 
 func (m *Deck) ToJson() ([]byte, error) {
 	return json.Marshal(m)
+}
+
+func UserFromPG(user postgresql.User) *User {
+	return &User{
+		Id:       user.ID,
+		Login:    user.Login.String,
+		Password: user.Password.String,
+	}
 }

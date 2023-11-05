@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"languago/internal/pkg/closer"
 	"languago/internal/pkg/config"
+	errors2 "languago/internal/pkg/errors"
 	"languago/internal/pkg/logger"
 	"log"
 	"sync"
@@ -22,6 +23,7 @@ type (
 		Healthcheck() []error
 		SetConfig(cfg config.AbstractNodeConfig)
 		ServiceBuilder(cfg config.AbstractConfig)
+		ErrorsPresenter() errors2.ErrorsPersenter
 		Log() logger.Logger
 	}
 
@@ -32,13 +34,15 @@ type (
 	}
 
 	node struct {
-		Id       uuid.UUID
-		config   config.AbstractNodeConfig
-		Logger   logger.Logger
-		Services map[string]Service
-		ErrorCh  chan error
-		closer   closer.Closer
-		closerCh chan closer.CloseFunc
+		id              uuid.UUID
+		config          config.AbstractNodeConfig
+		logger          logger.Logger
+		errorsPersenter errors2.ErrorsPersenter
+		services        map[string]Service
+		errorCh         chan error
+		closer          closer.Closer
+		closerCh        chan closer.CloseFunc
+		errorsObserver  errors2.ErrorsObserver
 	}
 
 	StopFunc func(n Node) error
@@ -46,10 +50,11 @@ type (
 	Services map[string]Service
 
 	NewNodeParams struct {
-		Services  Services
-		StopFuncs []StopFunc
-		Logger    logger.Logger
-		Closer    closer.Closer
+		Services        Services
+		StopFuncs       []StopFunc
+		Logger          logger.Logger
+		Closer          closer.Closer
+		ErrorsPresenter errors2.ErrorsPersenter
 	}
 )
 
@@ -64,34 +69,40 @@ func (n *node) ServiceBuilder(cfg config.AbstractConfig) {
 		})
 	}
 
-	n.Services = svc
+	n.services = svc
 }
 
-func NewNode(args *NewNodeParams) (Node, error) {
+func NewNode(args *NewNodeParams) Node {
 	if args == nil {
 		panic("error NewNodeParams are required.")
 	}
 
-	return &node{
-		Id:       uuid.New(),
-		Logger:   args.Logger,
-		Services: args.Services,
-		closer:   args.Closer,
-	}, nil
+	node := &node{
+		id:              uuid.New(),
+		logger:          args.Logger,
+		services:        args.Services,
+		errorsPersenter: args.ErrorsPresenter,
+		closer:          args.Closer,
+		errorsObserver:  errors2.NewErrorObserver(args.Logger),
+	}
+
+	node.LogErrors()
+
+	return node
 }
 
 func (n *node) Run() {
-	n.Logger.Info("starting the node services",
+	n.logger.Info("starting the node services",
 		logger.LogFields{
-			"node_id":       n.Id.String(),
-			"node_services": n.Services,
+			"node_id":       n.id.String(),
+			"node_services": n.services,
 		},
 	)
 
-	for name, s := range n.Services {
+	for name, s := range n.services {
 		log.Println(name, " starting")
-		s.StartService(n.ErrorCh, n.closerCh)
-		n.Logger.Info(fmt.Sprintf("service %s successfully started", name), nil)
+		s.StartService(n.errorCh, n.closerCh)
+		n.logger.Info(fmt.Sprintf("service %s successfully started", name), nil)
 	}
 }
 
@@ -101,11 +112,11 @@ func (n *node) Stop(ctx context.Context) {
 
 func (n *node) Healthcheck() []error {
 	var errs []error
-	var respCh chan error = make(chan error, len(n.Services))
+	var respCh chan error = make(chan error, len(n.services))
 	var wg sync.WaitGroup
 	defer close(respCh)
 
-	for name, s := range n.Services {
+	for name, s := range n.services {
 		wg.Add(1)
 		go func(name string, s Service) {
 			defer wg.Done()
@@ -138,10 +149,22 @@ func (n *node) Healthcheck() []error {
 	return errs
 }
 
-func (n *node) ID() uuid.UUID { return n.Id }
+func (n *node) ID() uuid.UUID { return n.id }
 
 func (n *node) SetConfig(cfg config.AbstractNodeConfig) {
 	n.config = cfg
 }
 
-func (n *node) Log() logger.Logger { return n.Logger }
+func (n *node) Log() logger.Logger { return n.logger }
+
+func (n *node) ErrorsPresenter() errors2.ErrorsPersenter {
+	return n.errorsPersenter
+}
+
+func (n *node) LogErrors() {
+	n.errorsObserver.WatchErrors(n)
+}
+
+func (n *node) ErrorChannel() chan error {
+	return n.errorCh
+}

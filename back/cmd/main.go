@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"languago/internal/pkg/closer"
 	"languago/internal/pkg/config"
 	"languago/internal/pkg/logger"
@@ -33,13 +32,10 @@ func main() {
 func Run(ctx context.Context) error {
 	cfg := config.InitialConfiguration()
 
-	node, err := server.NewNode(&server.NewNodeParams{
+	node := server.NewNode(&server.NewNodeParams{
 		Logger: cfg.GetLoggerConfig().GetLogger(),
 		Closer: closer.NewCloser(),
 	})
-	if err != nil {
-		return fmt.Errorf("error creating a node: %w", err)
-	}
 
 	node.ServiceBuilder(cfg)
 

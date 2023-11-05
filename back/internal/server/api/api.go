@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"io"
 	"languago/internal/pkg/config"
+	errors2 "languago/internal/pkg/errors"
 	"languago/internal/pkg/http/middleware"
 	"languago/internal/pkg/logger"
-	"languago/internal/pkg/models/entities"
 	"languago/internal/pkg/models/requests/rest"
 	"languago/internal/pkg/repository"
 	"net/http"
@@ -21,17 +21,22 @@ import (
 type (
 	API struct {
 		*mux.Router
-		Repo repository.DatabaseInteractor
-		log  logger.Logger
-		stop chan struct{}
+		Repo            repository.DatabaseInteractor
+		log             logger.Logger
+		errorsPresenter errors2.ErrorsPersenter
+		stop            chan struct{}
 	}
 )
 
 func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInteractor) *API {
+	logger := logger.ProvideLogger(cfg)
+	errorsPresenter := errors2.NewErrorPresenter(logger)
+
 	api := API{
-		Repo: interactor,
-		log:  logger.ProvideLogger(cfg),
-		stop: make(chan struct{}),
+		Repo:            interactor,
+		log:             logger,
+		errorsPresenter: errorsPresenter,
+		stop:            make(chan struct{}),
 	}
 
 	router := mux.NewRouter()
@@ -54,7 +59,6 @@ func (a *API) Stop() {
 }
 
 func (api *API) routes() {
-	api.HandleFunc("/", api.rootHandler()).Methods(http.MethodGet)
 	// Flashcards
 	// Returns an array of random words. For now, len(arr) == 1
 	// Example:
@@ -119,12 +123,6 @@ const (
 func (a *API) Init() {
 	a.routes()
 	a.log.Info("api initialized", nil)
-}
-
-func (a *API) rootHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello, world!"))
-	}
 }
 
 func (a *API) randomWordHandler() http.HandlerFunc {
@@ -199,7 +197,7 @@ func (a *API) getFlashcardHandler() http.HandlerFunc {
 				a.responseError(w, err, http.StatusBadRequest)
 				return
 			}
-			card, err := a.Repo.Database().SelectFlashcard(ctx, repository.SelectFlashcardParams{
+			cards, err := a.Repo.Database().SelectFlashcard(ctx, repository.SelectFlashcardParams{
 				ID: id,
 			})
 			if err != nil {
@@ -207,17 +205,18 @@ func (a *API) getFlashcardHandler() http.HandlerFunc {
 				return
 			}
 
-			if card == nil {
+			if cards == nil {
 				a.responseError(w, nil, http.StatusNotFound)
 				return
 			}
 
-			response.Flashcards = []*entities.Flashcard{card}
+			response.Flashcards = cards
 			resp, err := json.Marshal(response)
 			if err != nil {
 				a.responseError(w, fmt.Errorf("internal error"), http.StatusBadRequest)
 				return
 			}
+
 			w.WriteHeader(http.StatusOK)
 			w.Write(resp)
 		} else if deckId != "" {
@@ -227,7 +226,7 @@ func (a *API) getFlashcardHandler() http.HandlerFunc {
 				return
 			}
 			if word != "" {
-				card, err := a.Repo.Database().SelectFlashcard(ctx, repository.SelectFlashcardParams{
+				cards, err := a.Repo.Database().SelectFlashcard(ctx, repository.SelectFlashcardParams{
 					DeckID: deckId,
 					Word:   word,
 				})
@@ -236,12 +235,12 @@ func (a *API) getFlashcardHandler() http.HandlerFunc {
 					return
 				}
 
-				if card == nil {
+				if cards == nil {
 					a.responseError(w, nil, http.StatusNotFound)
 					return
 				}
 
-				response.Flashcards = []*entities.Flashcard{card}
+				response.Flashcards = cards
 				if err != nil {
 					a.responseError(w, fmt.Errorf("empty flashcard"), http.StatusBadRequest)
 					return
@@ -255,7 +254,7 @@ func (a *API) getFlashcardHandler() http.HandlerFunc {
 				w.WriteHeader(http.StatusOK)
 				w.Write(resp)
 			} else if meaning != "" {
-				card, err := a.Repo.Database().SelectFlashcard(ctx, repository.SelectFlashcardParams{
+				cards, err := a.Repo.Database().SelectFlashcard(ctx, repository.SelectFlashcardParams{
 					DeckID:  deckId,
 					Meaning: meaning,
 				})
@@ -264,12 +263,12 @@ func (a *API) getFlashcardHandler() http.HandlerFunc {
 					return
 				}
 
-				if card == nil {
+				if cards == nil {
 					a.responseError(w, nil, http.StatusNotFound)
 					return
 				}
 
-				response.Flashcards = []*entities.Flashcard{card}
+				response.Flashcards = cards
 				if err != nil {
 					a.responseError(w, fmt.Errorf("empty flashcard"), http.StatusBadRequest)
 					return

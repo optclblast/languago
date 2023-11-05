@@ -8,6 +8,8 @@ import (
 	"languago/internal/pkg/logger"
 	"languago/internal/pkg/repository"
 	"languago/internal/server/api"
+
+	errors2 "languago/internal/pkg/errors"
 	"net/http"
 	"time"
 
@@ -16,9 +18,10 @@ import (
 
 type (
 	flashcardService struct {
-		API    *api.API
-		log    logger.Logger
-		Config ServerConfigPresenter
+		API             *api.API
+		Config          ServerConfigPresenter
+		log             logger.Logger
+		errorsPresenter errors2.ErrorsPersenter
 	}
 
 	ServerConfigPresenter interface {

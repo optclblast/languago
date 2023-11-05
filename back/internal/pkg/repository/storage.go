@@ -81,7 +81,7 @@ func databaseConnection(c DBCredentials) (*sql.DB, error) {
 
 		db, err = sql.Open(c.GetDriver(), connStr)
 		if err != nil {
-			return nil, fmt.Errorf("error connecting to database: %w", properError(err))
+			return nil, fmt.Errorf("error connecting to database: %w", handleError(err))
 		}
 	case "mysql":
 		connStr = fmt.Sprintf("mysql://%s:%s@%s/%s",
@@ -89,7 +89,7 @@ func databaseConnection(c DBCredentials) (*sql.DB, error) {
 
 		db, err = sql.Open(c.GetDriver(), connStr)
 		if err != nil {
-			return nil, fmt.Errorf("error connecting to database: %w", properError(err))
+			return nil, fmt.Errorf("error connecting to database: %w", handleError(err))
 		}
 	default:
 		return nil, fmt.Errorf("error connecting to database. unknown driver.")

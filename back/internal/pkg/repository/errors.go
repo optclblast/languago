@@ -2,67 +2,32 @@ package repository
 
 import (
 	"database/sql"
+	errors2 "languago/internal/pkg/errors"
 
 	"github.com/lib/pq"
 )
 
-type (
-	ErrNotFound struct {
-		err error
-	}
-
-	ErrInternal struct {
-		err error
-	}
-
-	ErrAuth struct {
-		err error
-	}
-
-	ErrChannelAlreadyOpen struct {
-		err error
-	}
-
-	ErrChannelNotOpen struct {
-		err error
-	}
+var (
+	ErrChannelAlreadyOpen = errors2.New(500, "error channel alreay open", errors2.ErrInternalServerError)
+	ErrChannelNotOpen     = errors2.New(500, "error channel not open", errors2.ErrInternalServerError)
+	ErrInvalidData        = errors2.New(404, "error invalid data", errors2.ErrValidation)
 )
 
-func (e *ErrNotFound) Error() string {
-	return e.err.Error()
-}
-
-func (e *ErrInternal) Error() string {
-	return e.err.Error()
-}
-
-func (e *ErrAuth) Error() string {
-	return e.err.Error()
-}
-
-func (e *ErrChannelAlreadyOpen) Error() string {
-	return e.err.Error()
-}
-
-func (e *ErrChannelNotOpen) Error() string {
-	return e.err.Error()
-}
-
-func properError(err error) error {
+func handleError(err error) error {
 	switch {
 	case err == nil:
 		return nil
 	case err == sql.ErrNoRows:
-		return &ErrNotFound{err}
+		return errors2.ErrNotFound
 	case err == pq.ErrCouldNotDetectUsername ||
 		err == pq.ErrSSLKeyUnknownOwnership ||
 		err == pq.ErrSSLNotSupported:
 
-		return &ErrAuth{err}
+		return errors2.ErrBadRequest
 	case err == pq.ErrChannelAlreadyOpen:
-		return &ErrChannelAlreadyOpen{err}
+		return ErrChannelAlreadyOpen
 	case err == pq.ErrChannelNotOpen:
-		return &ErrChannelNotOpen{err}
+		return ErrChannelNotOpen
 	default:
 		return err
 	}
