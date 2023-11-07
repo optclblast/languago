@@ -1,6 +1,8 @@
 package rest
 
-import "languago/internal/pkg/models/entities"
+import (
+	"languago/internal/pkg/models/entities"
+)
 
 type (
 	NewFlashcardRequest struct {
@@ -26,11 +28,6 @@ type (
 		WordInNative  string   `json:"word_in_native,omitempty"`
 		WordInTarget  string   `json:"word_in_target,omitempty"`
 		UsageExamples []string `json:"usage,omitempty"`
-	}
-
-	CreateUserRequest struct {
-		Login    string `json:"login"`
-		Password string `json:"password"`
 	}
 )
 

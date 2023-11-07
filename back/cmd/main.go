@@ -27,6 +27,8 @@ func main() {
 	if err := Run(ctx); err != nil {
 		log.Fatal(err)
 	}
+
+	server := 
 }
 
 func Run(ctx context.Context) error {

@@ -2,8 +2,10 @@ package middleware
 
 import (
 	"encoding/json"
+	"languago/internal/pkg/http/headers"
 	"languago/internal/pkg/logger"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -12,13 +14,8 @@ type middleware struct {
 	closed bool
 }
 
-func NewMiddleware(log logger.Logger, closer chan struct{}) *middleware {
-	mw := &middleware{
-		log: log,
-	}
-	go mw.closer(closer)
-
-	return mw
+func NewMiddleware(log logger.Logger) *middleware {
+	return &middleware{log: log}
 }
 
 func (m *middleware) AuthMiddleware(next http.Handler) http.Handler {
@@ -88,18 +85,13 @@ func (m *middleware) Recovery(next http.Handler) http.Handler {
 	})
 }
 
-func (m *middleware) Close(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if m.closed {
-			w.WriteHeader(int(http.StateClosed))
-			w.Write([]byte("Closed"))
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
+func DoAuth(r *http.Request) bool {
+	if (r.Header.Get(headers.H_SIGN_IN) != "" || r.Header.Get(headers.H_SIGN_UP) != "") &&
+		(r.Method == http.MethodPost && (strings.Contains(r.RequestURI, "signin") ||
+			strings.Contains(r.RequestURI, "signup"))) {
+		return false
 
-func (m *middleware) closer(c chan struct{}) {
-	<-c
-	m.closed = true
+	}
+
+	return true
 }
