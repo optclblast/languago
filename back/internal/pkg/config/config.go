@@ -23,13 +23,17 @@ type (
 	}
 
 	AbstractNodeConfig interface {
-		GetHTTPAddress() string
-		GetRPCAddress() string
 		SetLogger(l logger.Logger)
+		GetServicesCfg() []AbstractServiceConfig
 	}
 
 	AbstractLoggerConfig interface {
 		GetLogger() logger.Logger
+	}
+
+	AbstractServiceConfig interface {
+		ServiceName() string
+		GetHTTPAddress() string
 	}
 
 	Config struct {
@@ -46,11 +50,13 @@ type (
 	}
 
 	NodeConfig struct {
-		Logger      logger.Logger
-		HTTPAddress string
-		HTTPPort    string
-		RPCAddress  string
-		RPCPort     string
+		Logger   logger.Logger
+		Services []AbstractServiceConfig
+	}
+
+	ServiceConfig struct {
+		Name    string
+		Address string
 	}
 
 	LoggerConfig struct {
@@ -89,14 +95,62 @@ func InitialConfiguration() AbstractConfig {
 	config.DatabaseCfg.DatabaseUser = dbRaw["db_user"]
 	config.DatabaseCfg.DatabaseSecret = dbRaw["db_secret"]
 
-	nodeRaw := viper.GetStringMapString("node")
-	config.NodeCfg.HTTPAddress = nodeRaw["http_address"]
-	config.NodeCfg.HTTPPort = nodeRaw["http_port"]
-	config.NodeCfg.RPCAddress = nodeRaw["rpc_address"]
-	config.NodeCfg.RPCPort = nodeRaw["rpc_port"]
+	nodeRaw := viper.GetStringMap("node.services")
+	config.NodeCfg.Services = make([]AbstractServiceConfig, 0)
+
+	for name, serviceRaw := range nodeRaw {
+		var ok bool
+		service := make(map[string]interface{}, len(nodeRaw))
+
+		if service, ok = serviceRaw.(map[string]interface{}); !ok {
+			panic("error init node config")
+		}
+
+		serviceConfig := new(ServiceConfig)
+		var addr, port string
+
+		for key, value := range service {
+			if serviceData, ok := value.(string); ok {
+				if key == "address" {
+					addr = serviceData
+				} else if key == "port" {
+					port = serviceData
+				}
+
+				if addr != "" && port != "" {
+					serviceConfig.Name = name
+					serviceConfig.Address = fmt.Sprintf("%s:%s", addr, port)
+					config.NodeCfg.Services = append(config.NodeCfg.Services, serviceConfig)
+				}
+			}
+		}
+
+		if len(config.NodeCfg.Services) == 0 {
+			panic("error can't init services config")
+		}
+
+		// for name, service := range services {
+		// 	fmt.Println("SERVICE_ROW: ", service)
+		// 	serviceConfig := &ServiceConfig{
+		// 		Name: name,
+		// 		Address: fmt.Sprintf("%s:%s",
+		// 			service["address"],
+		// 			service["port"],
+		// 		),
+		// 	}
+		// 	config.NodeCfg.Services = append(
+		// 		config.NodeCfg.Services,
+		// 		serviceConfig,
+		// 	)
+		// }
+	}
+
+	fmt.Println("SERVICES: ", config.NodeCfg.Services)
 
 	logRaw := viper.GetStringMapString("logger")
-	var envValue logger.EnvParam = logger.MustToEnvParam(viper.GetString("logger.env"))
+	var envValue logger.EnvParam = logger.MustToEnvParam(
+		viper.GetString("logger.env"),
+	)
 
 	switch logRaw["logger"] {
 	case "logrus":
@@ -133,12 +187,8 @@ func (c *DatabaseConfig) GetCredentials() repository.DBCredentials {
 	}
 }
 
-func (c *NodeConfig) GetHTTPAddress() string {
-	return fmt.Sprintf("%s:%s", c.HTTPAddress, c.HTTPPort)
-}
-
-func (c *NodeConfig) GetRPCAddress() string {
-	return fmt.Sprintf("%s:%s", c.RPCAddress, c.RPCPort)
+func (c *NodeConfig) GetServicesCfg() []AbstractServiceConfig {
+	return c.Services
 }
 
 func (c *NodeConfig) SetLogger(l logger.Logger) {
@@ -147,4 +197,12 @@ func (c *NodeConfig) SetLogger(l logger.Logger) {
 
 func (c *LoggerConfig) GetLogger() logger.Logger {
 	return c.Logger
+}
+
+func (c *ServiceConfig) ServiceName() string {
+	return c.Name
+}
+
+func (c *ServiceConfig) GetHTTPAddress() string {
+	return c.Address
 }

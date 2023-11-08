@@ -1,8 +1,8 @@
 node: 
-  http_address: "localhost"
-  http_port: "3300"
-  rpc_address: ""
-  rpc_port: ""
+  services:
+    flashcards:
+      address: "localhost"
+      port: "3300"
 database: 
   db_address: "localhost:5432"
   db_driver: "postgres"

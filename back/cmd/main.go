@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"languago/internal/pkg/closer"
+	"fmt"
 	"languago/internal/pkg/config"
-	"languago/internal/pkg/logger"
+	errors2 "languago/internal/pkg/errors"
 	"languago/internal/server"
-	"log"
+
 	"os/signal"
 	"syscall"
 	"time"
@@ -24,38 +24,24 @@ func main() {
 	)
 	defer stop()
 
-	if err := Run(ctx); err != nil {
-		log.Fatal(err)
-	}
-
-	server := 
-}
-
-func Run(ctx context.Context) error {
 	cfg := config.InitialConfiguration()
+	logger := cfg.GetLoggerConfig().GetLogger()
 
 	node := server.NewNode(&server.NewNodeParams{
-		Logger: cfg.GetLoggerConfig().GetLogger(),
-		Closer: closer.NewCloser(),
+		Logger:          logger,
+		Config:          cfg,
+		ErrorsPresenter: errors2.NewErrorPresenter(logger),
 	})
 
-	node.ServiceBuilder(cfg)
+	fmt.Println(node.ID())
 
 	go func() {
 		node.Run()
 	}()
 	<-ctx.Done()
 
-	node.Log().Info("node shutting down", logger.LogFields{
+	node.Log().Info("node shutting down", map[string]any{
 		"node_id": node.ID().String(),
 		"time":    time.Now(),
 	})
-
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	defer cancel()
-
-	node.Stop(shutdownCtx)
-	node.Log().Info("node stoped", nil)
-
-	return nil
 }

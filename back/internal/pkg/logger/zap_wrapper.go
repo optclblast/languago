@@ -66,6 +66,8 @@ func getZapFields(kv LogFields) []zap.Field {
 			f = append(f, zap.Float64(k, v.(float64)))
 		case bool:
 			f = append(f, zap.Bool(k, v.(bool)))
+		default:
+			f = append(f, zap.Any(k, v))
 		}
 	}
 	return f

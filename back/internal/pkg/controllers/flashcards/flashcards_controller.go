@@ -12,8 +12,8 @@ import (
 type FlashcardsController interface {
 	CreateFlashcard(ctx context.Context, req *rest.NewFlashcardRequest) (*rest.NewFlashcardResponse, error)
 	GetFlashcard(ctx context.Context, args GetFlashcardParams) (*rest.GetFlashcardResponse, error)
-	DeleteFlashcard()
-	EditFlashcard()
+	DeleteFlashcard(ctx context.Context, args DeleteFlashcardRequest) error
+	EditFlashcard(ctx context.Context, args *rest.EditFlashcardRequest) error
 }
 
 type flashcardController struct {
@@ -31,7 +31,9 @@ func NewFlashcardsController(
 	}
 }
 
-func (c *flashcardController) CreateFlashcard() {}
+func (c *flashcardController) CreateFlashcard(ctx context.Context, req *rest.NewFlashcardRequest) (*rest.NewFlashcardResponse, error) {
+	return nil, nil
+}
 
 type GetFlashcardParams struct {
 	Id      uuid.UUID
@@ -40,6 +42,16 @@ type GetFlashcardParams struct {
 	Meaning string
 }
 
-// func (c *flashcardController) GetFlashcard()    {}
-// func (c *flashcardController) DeleteFlashcard() {}
-// func (c *flashcardController) EditFlashcard()   {}
+func (c *flashcardController) GetFlashcard(ctx context.Context, args GetFlashcardParams) (*rest.GetFlashcardResponse, error) {
+	return nil, nil
+}
+
+type DeleteFlashcardRequest struct{}
+
+func (c *flashcardController) DeleteFlashcard(ctx context.Context, args DeleteFlashcardRequest) error {
+	return nil
+}
+
+func (c *flashcardController) EditFlashcard(ctx context.Context, args *rest.EditFlashcardRequest) error {
+	return nil
+}
