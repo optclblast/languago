@@ -20,6 +20,7 @@ type (
 
 	AbstractDatabaseConfig interface {
 		GetCredentials() repository.DBCredentials
+		IsMock() bool
 	}
 
 	AbstractNodeConfig interface {
@@ -43,6 +44,7 @@ type (
 	}
 
 	DatabaseConfig struct {
+		isMock          bool
 		DatabaseAddress string
 		DatabaseDriver  string
 		DatabaseUser    string
@@ -94,6 +96,7 @@ func InitialConfiguration() AbstractConfig {
 	config.DatabaseCfg.DatabaseDriver = dbRaw["db_driver"]
 	config.DatabaseCfg.DatabaseUser = dbRaw["db_user"]
 	config.DatabaseCfg.DatabaseSecret = dbRaw["db_secret"]
+	config.DatabaseCfg.isMock = viper.GetBool("database.is_mock")
 
 	nodeRaw := viper.GetStringMap("node.services")
 	config.NodeCfg.Services = make([]AbstractServiceConfig, 0)
@@ -128,24 +131,7 @@ func InitialConfiguration() AbstractConfig {
 		if len(config.NodeCfg.Services) == 0 {
 			panic("error can't init services config")
 		}
-
-		// for name, service := range services {
-		// 	fmt.Println("SERVICE_ROW: ", service)
-		// 	serviceConfig := &ServiceConfig{
-		// 		Name: name,
-		// 		Address: fmt.Sprintf("%s:%s",
-		// 			service["address"],
-		// 			service["port"],
-		// 		),
-		// 	}
-		// 	config.NodeCfg.Services = append(
-		// 		config.NodeCfg.Services,
-		// 		serviceConfig,
-		// 	)
-		// }
 	}
-
-	fmt.Println("SERVICES: ", config.NodeCfg.Services)
 
 	logRaw := viper.GetStringMapString("logger")
 	var envValue logger.EnvParam = logger.MustToEnvParam(
@@ -185,6 +171,10 @@ func (c *DatabaseConfig) GetCredentials() repository.DBCredentials {
 		User:      c.DatabaseUser,
 		Secret:    c.DatabaseSecret,
 	}
+}
+
+func (c *DatabaseConfig) IsMock() bool {
+	return c.isMock
 }
 
 func (c *NodeConfig) GetServicesCfg() []AbstractServiceConfig {

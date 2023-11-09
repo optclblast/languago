@@ -2,6 +2,7 @@ package flashcards
 
 import (
 	"context"
+	"fmt"
 	"languago/internal/pkg/logger"
 	"languago/internal/pkg/models/requests/rest"
 	"languago/internal/pkg/repository"
@@ -10,7 +11,7 @@ import (
 )
 
 type FlashcardsController interface {
-	CreateFlashcard(ctx context.Context, req *rest.NewFlashcardRequest) (*rest.NewFlashcardResponse, error)
+	CreateFlashcard(ctx context.Context, req *rest.NewFlashcardRequest) error
 	GetFlashcard(ctx context.Context, args GetFlashcardParams) (*rest.GetFlashcardResponse, error)
 	DeleteFlashcard(ctx context.Context, args DeleteFlashcardRequest) error
 	EditFlashcard(ctx context.Context, args *rest.EditFlashcardRequest) error
@@ -31,8 +32,18 @@ func NewFlashcardsController(
 	}
 }
 
-func (c *flashcardController) CreateFlashcard(ctx context.Context, req *rest.NewFlashcardRequest) (*rest.NewFlashcardResponse, error) {
-	return nil, nil
+func (c *flashcardController) CreateFlashcard(ctx context.Context, req *rest.NewFlashcardRequest) error {
+	err := c.storage.Database().CreateFlashcard(ctx, repository.CreateFlashcardParams{
+		ID:      uuid.New(),
+		Word:    req.Content.WordInTarget,
+		Meaning: req.Content.WordInNative,
+		Usage:   req.Content.UsageExamples,
+	})
+	if err != nil {
+		return fmt.Errorf("error create flashcard: %w", err)
+	}
+
+	return nil
 }
 
 type GetFlashcardParams struct {

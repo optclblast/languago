@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"languago/internal/pkg/config"
 	errors2 "languago/internal/pkg/errors"
 	"languago/internal/server"
@@ -32,8 +31,6 @@ func main() {
 		Config:          cfg,
 		ErrorsPresenter: errors2.NewErrorPresenter(logger),
 	})
-
-	fmt.Println(node.ID())
 
 	go func() {
 		node.Run()

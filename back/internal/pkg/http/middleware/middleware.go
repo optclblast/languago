@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"encoding/json"
+	"languago/internal/pkg/ctxtools"
 	"languago/internal/pkg/http/headers"
 	"languago/internal/pkg/logger"
 	"net/http"
@@ -10,8 +11,7 @@ import (
 )
 
 type middleware struct {
-	log    logger.Logger
-	closed bool
+	log logger.Logger
 }
 
 func NewMiddleware(log logger.Logger) *middleware {
@@ -20,7 +20,20 @@ func NewMiddleware(log logger.Logger) *middleware {
 
 func (m *middleware) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// TODO implement auth middleware
+		if !doAuth(r) {
+			m.log.Warn(
+				"authorization request (sign up)",
+				logger.LogFields{
+					"datetime":    time.Now(),
+					"request_id":  ctxtools.RequestId(r.Context()),
+					"remote_addr": r.RemoteAddr,
+					"host":        r.Host,
+					"user_agent":  r.UserAgent(),
+					"referer":     r.Referer(),
+				},
+			)
+		}
+
 		next.ServeHTTP(w, r)
 	})
 }
@@ -34,20 +47,7 @@ func (m *middleware) RequestValidationMiddleware(next http.Handler) http.Handler
 
 func (m *middleware) LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		m.log.Info("logging middleware",
-			logger.LogFields{
-				"datetime":     time.Now(),
-				"scheme":       r.URL.Scheme,
-				"method":       r.Method,
-				"path":         r.URL.Path,
-				"remote_addr":  r.RemoteAddr,
-				"host":         r.Host,
-				"user_agent":   r.UserAgent(),
-				"referer":      r.Referer(),
-				"request_id":   r.Header.Get("X-Request-ID"),
-				"content_type": r.Header.Get("Content-Type"),
-			},
-		)
+		m.logRequest(r, "log", false)
 		next.ServeHTTP(w, r)
 	})
 }
@@ -57,19 +57,7 @@ func (m *middleware) Recovery(next http.Handler) http.Handler {
 		defer func() {
 			err := recover()
 			if err != nil {
-				m.log.Warn("recovered from panic", logger.LogFields{
-					"datetime":     time.Now(),
-					"scheme":       r.URL.Scheme,
-					"method":       r.Method,
-					"path":         r.URL.Path,
-					"remote_addr":  r.RemoteAddr,
-					"host":         r.Host,
-					"user_agent":   r.UserAgent(),
-					"referer":      r.Referer(),
-					"request_id":   r.Header.Get("X-Request-ID"),
-					"content_type": r.Header.Get("Content-Type"),
-				},
-				)
+				m.logRequest(r, "recover", true)
 
 				jsonBody, _ := json.Marshal(map[string]string{
 					"error": "Internal server error",
@@ -85,13 +73,33 @@ func (m *middleware) Recovery(next http.Handler) http.Handler {
 	})
 }
 
-func DoAuth(r *http.Request) bool {
-	if (r.Header.Get(headers.H_SIGN_IN) != "" || r.Header.Get(headers.H_SIGN_UP) != "") &&
-		(r.Method == http.MethodPost && (strings.Contains(r.RequestURI, "signin") ||
-			strings.Contains(r.RequestURI, "signup"))) {
+func doAuth(r *http.Request) bool {
+	if r.Header.Get(headers.H_SIGN_UP) != "" &&
+		(r.Method == http.MethodPost &&
+			strings.Contains(r.RequestURI, "signup")) {
 		return false
-
 	}
 
 	return true
+}
+
+func (m *middleware) logRequest(r *http.Request, mw string, err bool) {
+	fields := logger.LogFields{
+		"datetime":     time.Now(),
+		"request_id":   ctxtools.RequestId(r.Context()),
+		"scheme":       r.URL.Scheme,
+		"method":       r.Method,
+		"path":         r.URL.Path,
+		"remote_addr":  r.RemoteAddr,
+		"host":         r.Host,
+		"user_agent":   r.UserAgent(),
+		"referer":      r.Referer(),
+		"content_type": r.Header.Get("Content-Type"),
+	}
+
+	if err {
+		m.log.Error(mw, fields)
+	} else {
+		m.log.Info(mw, fields)
+	}
 }

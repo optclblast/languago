@@ -1,6 +1,7 @@
 package auth
 
-type Token struct {
-	Token        string `json:"token"`
-	RefteshToken string `json:"refresh_token"`
-}
+// import "languago/internal/pkg/models"
+
+// func Authorize(token Token) (*models.User, error) {
+
+// }

@@ -42,15 +42,20 @@ func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInter
 		Repo:            interactor,
 		log:             logger,
 		errorsPresenter: errorsPresenter,
+		flashcardsController: flashcards.NewFlashcardsController(
+			logger,
+			interactor,
+		),
 	}
 
 	router := chi.NewRouter()
 
 	mw := middleware.NewMiddleware(api.log)
+
+	router.Use(chimw.RequestID)
 	router.Use(mw.LoggingMiddleware)
 	router.Use(mw.AuthMiddleware)
 	router.Use(mw.Recovery)
-	router.Use(chimw.RequestID)
 
 	router.Post("/signup", api.signUpHandler)
 
@@ -147,7 +152,7 @@ func (a *API) randomWordHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) newFlashcardHandler(w http.ResponseWriter, r *http.Request) {
-	var req rest.NewFlashcardRequest
+	req := new(rest.NewFlashcardRequest)
 	body, err := io.ReadAll(r.Body)
 	defer r.Body.Close()
 
@@ -163,12 +168,7 @@ func (a *API) newFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, c := context.WithTimeout(context.Background(), 5*time.Second)
 	defer c()
 
-	err = a.Repo.Database().CreateFlashcard(ctx, repository.CreateFlashcardParams{
-		ID:      uuid.New(),
-		Word:    req.Content.WordInTarget,
-		Meaning: req.Content.WordInNative,
-		Usage:   req.Content.UsageExamples,
-	})
+	err = a.flashcardsController.CreateFlashcard(ctx, req)
 	if err != nil {
 		a.responseError(w, fmt.Errorf("internal server error"), http.StatusInternalServerError)
 		return

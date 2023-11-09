@@ -43,8 +43,15 @@ type (
 )
 
 func NewDatabaseInteractor(cfg abstractDatabaseConfig) (DatabaseInteractor, error) {
+	if cfg.IsMock() {
+		mock := &databaseInteractor{
+			DB: _newMockStorage(),
+		}
+		return mock, nil
+	}
+
 	if cfg == nil {
-		return nil, fmt.Errorf("error database config required.")
+		return nil, fmt.Errorf("error database config required")
 	}
 	cred := cfg.GetCredentials()
 
