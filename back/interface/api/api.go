@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"languago/internal/pkg/auth"
 	"languago/internal/pkg/config"
 	"languago/internal/pkg/controllers/flashcards"
 	"languago/internal/pkg/controllers/users"
@@ -13,6 +14,7 @@ import (
 	"languago/internal/pkg/logger"
 	"languago/internal/pkg/models/requests/rest"
 	"languago/internal/pkg/repository"
+	"os"
 
 	"net/http"
 	"time"
@@ -46,11 +48,19 @@ func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInter
 			logger,
 			interactor,
 		),
+		usersController: users.NewUsersController(
+			logger,
+			interactor,
+		),
 	}
 
 	router := chi.NewRouter()
 
-	mw := middleware.NewMiddleware(api.log)
+	mw := middleware.NewMiddleware(api.log, auth.NewAuthorizer(
+		logger,
+		interactor.Database(),
+		[]byte(os.Getenv("LANGUAGO_SECRET")),
+	))
 
 	router.Use(chimw.RequestID)
 	router.Use(mw.LoggingMiddleware)
@@ -86,11 +96,11 @@ const (
 func (a *API) signUpHandler(w http.ResponseWriter, r *http.Request) {
 	req := new(rest.SignUpRequest)
 
-	rawBody := make([]byte, 0)
-	_, err := r.Body.Read(rawBody)
+	rawBody, err := io.ReadAll(r.Body)
 	defer r.Body.Close()
+
 	if err != nil {
-		a.responseError(
+		a.Response(
 			w,
 			fmt.Errorf("error read request body: %w", err),
 			http.StatusInternalServerError,
@@ -100,7 +110,7 @@ func (a *API) signUpHandler(w http.ResponseWriter, r *http.Request) {
 
 	err = json.Unmarshal(rawBody, &req)
 	if err != nil {
-		a.responseError(
+		a.Response(
 			w,
 			fmt.Errorf("error read request body: %w", err),
 			http.StatusInternalServerError,
@@ -108,12 +118,11 @@ func (a *API) signUpHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, close := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, close := context.WithTimeout(r.Context(), 500*time.Second)
 	defer close()
-
 	err = a.usersController.CreateUser(ctx, req)
 	if err != nil {
-		a.responseError(
+		a.Response(
 			w,
 			fmt.Errorf("error create user: %w", err),
 			http.StatusInternalServerError,
@@ -127,7 +136,7 @@ func (a *API) signUpHandler(w http.ResponseWriter, r *http.Request) {
 func (a *API) randomWordHandler(w http.ResponseWriter, r *http.Request) {
 	resp, err := http.Get(randomwordapi)
 	if err != nil {
-		a.responseError(
+		a.Response(
 			w,
 			fmt.Errorf("error getting response from %s: %w", randomwordapi, err),
 			http.StatusInternalServerError,
@@ -138,7 +147,7 @@ func (a *API) randomWordHandler(w http.ResponseWriter, r *http.Request) {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		a.responseError(
+		a.Response(
 			w,
 			fmt.Errorf("error reading response body from %s: %w", randomwordapi, err),
 			http.StatusInternalServerError,
@@ -157,11 +166,11 @@ func (a *API) newFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	if err != nil {
-		a.responseError(w, fmt.Errorf("error reading request body: %w", err), http.StatusBadRequest)
+		a.Response(w, fmt.Errorf("error reading request body: %w", err), http.StatusBadRequest)
 		return
 	}
 	if err = json.Unmarshal(body, &req); err != nil {
-		a.responseError(w, fmt.Errorf("error parsing request body: %w", err), http.StatusBadRequest)
+		a.Response(w, fmt.Errorf("error parsing request body: %w", err), http.StatusBadRequest)
 		return
 	}
 
@@ -170,11 +179,11 @@ func (a *API) newFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 
 	err = a.flashcardsController.CreateFlashcard(ctx, req)
 	if err != nil {
-		a.responseError(w, fmt.Errorf("internal server error"), http.StatusInternalServerError)
+		a.Response(w, fmt.Errorf("internal server error"), http.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	a.Response(w, nil, http.StatusOK)
 }
 
 func (a *API) getFlashcardHandler(w http.ResponseWriter, r *http.Request) {
@@ -186,31 +195,33 @@ func (a *API) getFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, c := context.WithTimeout(context.Background(), 5*time.Second)
 	defer c()
 
+	w.Header().Add("Content-Type", "application/json")
+
 	// TODO refactoring of this abomination
-	var response *rest.GetFlashcardResponse
+	response := new(rest.GetFlashcardResponse)
 	if id != "" {
 		id, err := uuid.Parse(id)
 		if err != nil {
-			a.responseError(w, err, http.StatusBadRequest)
+			a.Response(w, err, http.StatusBadRequest)
 			return
 		}
 		cards, err := a.Repo.Database().SelectFlashcard(ctx, repository.SelectFlashcardParams{
 			ID: id,
 		})
 		if err != nil {
-			a.responseError(w, err, http.StatusBadRequest)
+			a.Response(w, err, http.StatusBadRequest)
 			return
 		}
 
 		if cards == nil {
-			a.responseError(w, nil, http.StatusNotFound)
+			a.Response(w, nil, http.StatusNotFound)
 			return
 		}
 
 		response.Flashcards = cards
 		resp, err := json.Marshal(response)
 		if err != nil {
-			a.responseError(w, fmt.Errorf("internal error"), http.StatusBadRequest)
+			a.Response(w, fmt.Errorf("internal error"), http.StatusBadRequest)
 			return
 		}
 
@@ -219,7 +230,7 @@ func (a *API) getFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 	} else if deckId != "" {
 		deckId, err := uuid.Parse(deckId)
 		if err != nil {
-			a.responseError(w, err, http.StatusBadRequest)
+			a.Response(w, err, http.StatusBadRequest)
 			return
 		}
 		if word != "" {
@@ -228,24 +239,24 @@ func (a *API) getFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 				Word:   word,
 			})
 			if err != nil {
-				a.responseError(w, err, http.StatusBadRequest)
+				a.Response(w, err, http.StatusBadRequest)
 				return
 			}
 
 			if cards == nil {
-				a.responseError(w, nil, http.StatusNotFound)
+				a.Response(w, nil, http.StatusNotFound)
 				return
 			}
 
 			response.Flashcards = cards
 			if err != nil {
-				a.responseError(w, fmt.Errorf("empty flashcard"), http.StatusBadRequest)
+				a.Response(w, fmt.Errorf("empty flashcard"), http.StatusBadRequest)
 				return
 			}
 
 			resp, err := json.Marshal(response)
 			if err != nil {
-				a.responseError(w, fmt.Errorf("internal error"), http.StatusBadRequest)
+				a.Response(w, fmt.Errorf("internal error"), http.StatusBadRequest)
 				return
 			}
 			w.WriteHeader(http.StatusOK)
@@ -256,34 +267,28 @@ func (a *API) getFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 				Meaning: meaning,
 			})
 			if err != nil {
-				a.responseError(w, err, http.StatusBadRequest)
+				a.Response(w, err, http.StatusBadRequest)
 				return
 			}
 
 			if cards == nil {
-				a.responseError(w, nil, http.StatusNotFound)
+				a.Response(w, nil, http.StatusNotFound)
 				return
 			}
 
 			response.Flashcards = cards
 			if err != nil {
-				a.responseError(w, fmt.Errorf("empty flashcard"), http.StatusBadRequest)
+				a.Response(w, fmt.Errorf("empty flashcard"), http.StatusBadRequest)
 				return
 			}
 
-			resp, err := json.Marshal(response)
-			if err != nil {
-				a.responseError(w, fmt.Errorf("internal error"), http.StatusBadRequest)
-				return
-			}
-			w.WriteHeader(http.StatusOK)
-			w.Write(resp)
+			a.Response(w, response, http.StatusOK)
 		} else {
-			a.responseError(w, nil, http.StatusBadRequest)
+			a.Response(w, nil, http.StatusBadRequest)
 			return
 		}
 	} else {
-		a.responseError(w, nil, http.StatusBadRequest)
+		a.Response(w, nil, http.StatusBadRequest)
 		return
 	}
 }
@@ -292,7 +297,7 @@ func (a *API) deleteFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	uuid, err := uuid.Parse(id)
 	if err != nil {
-		a.responseError(w, err, http.StatusBadRequest)
+		a.Response(w, err, http.StatusBadRequest)
 		return
 	}
 
@@ -301,7 +306,7 @@ func (a *API) deleteFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 
 	err = a.Repo.Database().DeleteFlashcard(ctx, uuid)
 	if err != nil {
-		a.responseError(w, err, http.StatusInternalServerError)
+		a.Response(w, err, http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -313,12 +318,12 @@ func (a *API) editFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	if err != nil {
-		a.responseError(w, fmt.Errorf("error reading request body: %w", err), http.StatusBadRequest)
+		a.Response(w, fmt.Errorf("error reading request body: %w", err), http.StatusBadRequest)
 		return
 	}
 
 	if err = json.Unmarshal(body, &request); err != nil {
-		a.responseError(w, fmt.Errorf("error parsing request body: %w", err), http.StatusBadRequest)
+		a.Response(w, fmt.Errorf("error parsing request body: %w", err), http.StatusBadRequest)
 		return
 	}
 
@@ -327,7 +332,7 @@ func (a *API) editFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 
 	id, err := uuid.Parse(request.Id)
 	if err != nil {
-		a.responseError(w, fmt.Errorf("error invalid id: %w", err), http.StatusBadRequest)
+		a.Response(w, fmt.Errorf("error invalid id: %w", err), http.StatusBadRequest)
 		return
 	}
 	params := repository.UpdateFlashcardParams{
@@ -348,9 +353,27 @@ func (a *API) editFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 
 	err = a.Repo.Database().UpdateFlashcard(ctx, params)
 	if err != nil {
-		a.responseError(w, fmt.Errorf("error editing flashcard: %w", err), http.StatusBadRequest)
+		a.Response(w, fmt.Errorf("error editing flashcard: %w", err), http.StatusBadRequest)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (a *API) Response(w http.ResponseWriter, resp any, status int) {
+	if status != 200 {
+		a.responseError(w, resp.(error), status)
+		return
+	}
+
+	w.Header().Add("Content-Type", "application/json")
+
+	respRaw, err := json.Marshal(resp)
+	if err != nil {
+		a.responseError(w, fmt.Errorf("internal error"), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(status)
+	w.Write(respRaw)
 }

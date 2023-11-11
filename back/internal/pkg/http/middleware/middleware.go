@@ -1,28 +1,43 @@
 package middleware
 
 import (
+	"context"
 	"encoding/json"
+	"languago/internal/pkg/auth"
 	"languago/internal/pkg/ctxtools"
-	"languago/internal/pkg/http/headers"
 	"languago/internal/pkg/logger"
 	"net/http"
-	"strings"
 	"time"
+
+	errors2 "languago/internal/pkg/errors"
+
+	"github.com/golang-jwt/jwt"
+	"github.com/google/uuid"
+)
+
+const (
+	H_SIGN_IN       = "L-Sign-In"
+	H_SIGN_UP       = "L-Sign-Up"
+	H_Authorization = "Authorization"
 )
 
 type middleware struct {
-	log logger.Logger
+	log  logger.Logger
+	auth auth.Authorizer
 }
 
-func NewMiddleware(log logger.Logger) *middleware {
-	return &middleware{log: log}
+func NewMiddleware(log logger.Logger, auth auth.Authorizer) *middleware {
+	return &middleware{
+		log:  log,
+		auth: auth,
+	}
 }
 
 func (m *middleware) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !doAuth(r) {
 			m.log.Warn(
-				"authorization request (sign up)",
+				"[ SIGN_UP_REQUEST ]",
 				logger.LogFields{
 					"datetime":    time.Now(),
 					"request_id":  ctxtools.RequestId(r.Context()),
@@ -32,9 +47,76 @@ func (m *middleware) AuthMiddleware(next http.Handler) http.Handler {
 					"referer":     r.Referer(),
 				},
 			)
-		}
 
-		next.ServeHTTP(w, r)
+			userID := uuid.New()
+
+			ctxR := r.WithContext(context.WithValue(r.Context(), ctxtools.UserIDCtxKey, userID))
+
+			token, err := m.auth.CreateToken(auth.ClaimJWTParams{
+				UserId: userID.String(),
+			})
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			ctxR.Header.Add(H_Authorization, token)
+
+			next.ServeHTTP(w, ctxR)
+		} else {
+			tokenStr := r.Header.Get(H_Authorization)
+			if tokenStr == "" {
+				m.log.Error("error auth", logger.LogFields{
+					"datetime":    time.Now(),
+					"request_id":  ctxtools.RequestId(r.Context()),
+					"remote_addr": r.RemoteAddr,
+					"host":        r.Host,
+					"user_agent":  r.UserAgent(),
+					"referer":     r.Referer(),
+				})
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			token, err := jwt.ParseWithClaims(tokenStr, make(jwt.MapClaims), func(token *jwt.Token) (interface{}, error) {
+				if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
+					return nil, errors2.ErrInvalidToken
+				}
+				return m.auth.Secret(), nil
+			})
+			if err != nil {
+				m.log.Error("error parse token", logger.LogFields{
+					"datetime":    time.Now(),
+					"request_id":  ctxtools.RequestId(r.Context()),
+					"remote_addr": r.RemoteAddr,
+					"host":        r.Host,
+					"user_agent":  r.UserAgent(),
+					"referer":     r.Referer(),
+					"error":       err,
+				})
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			user, err := m.auth.Authorize(token)
+			if err != nil {
+				m.log.Error("error auth", logger.LogFields{
+					"datetime":    time.Now(),
+					"request_id":  ctxtools.RequestId(r.Context()),
+					"remote_addr": r.RemoteAddr,
+					"host":        r.Host,
+					"user_agent":  r.UserAgent(),
+					"referer":     r.Referer(),
+					"error":       err,
+				})
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			ctxR := r.WithContext(context.WithValue(r.Context(), ctxtools.UserCtxKey, user))
+
+			next.ServeHTTP(w, ctxR)
+		}
 	})
 }
 
@@ -47,7 +129,7 @@ func (m *middleware) RequestValidationMiddleware(next http.Handler) http.Handler
 
 func (m *middleware) LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		m.logRequest(r, "log", false)
+		m.logRequest(r, "[ REQUEST_LOG ]", false)
 		next.ServeHTTP(w, r)
 	})
 }
@@ -57,7 +139,19 @@ func (m *middleware) Recovery(next http.Handler) http.Handler {
 		defer func() {
 			err := recover()
 			if err != nil {
-				m.logRequest(r, "recover", true)
+				m.log.Error("error auth", logger.LogFields{
+					"datetime":     time.Now(),
+					"request_id":   ctxtools.RequestId(r.Context()),
+					"scheme":       r.URL.Scheme,
+					"method":       r.Method,
+					"path":         r.URL.Path,
+					"remote_addr":  r.RemoteAddr,
+					"host":         r.Host,
+					"user_agent":   r.UserAgent(),
+					"referer":      r.Referer(),
+					"content_type": r.Header.Get("Content-Type"),
+					"error":        err,
+				})
 
 				jsonBody, _ := json.Marshal(map[string]string{
 					"error": "Internal server error",
@@ -73,10 +167,10 @@ func (m *middleware) Recovery(next http.Handler) http.Handler {
 	})
 }
 
+var testKey string = "1234"
+
 func doAuth(r *http.Request) bool {
-	if r.Header.Get(headers.H_SIGN_UP) != "" &&
-		(r.Method == http.MethodPost &&
-			strings.Contains(r.RequestURI, "signup")) {
+	if r.Header[H_SIGN_UP][0] == testKey && r.Method == http.MethodPost {
 		return false
 	}
 

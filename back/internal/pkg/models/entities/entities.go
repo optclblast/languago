@@ -2,6 +2,7 @@ package entities
 
 import (
 	"encoding/json"
+	"languago/internal/pkg/models"
 	"languago/internal/pkg/repository/postgresql"
 
 	// "languago/pkg/models/requests/rest"
@@ -18,11 +19,12 @@ type (
 	}
 
 	Flashcard struct {
-		NativeLanguage string   `json:"native_lang"`
-		TargetLang     string   `json:"target_lang"`
-		Meaning        string   `json:"word_in_native"`
-		Word           string   `json:"word_in_target"`
-		UsageExamples  []string `json:"usage"`
+		ID             uuid.UUID `json:"id"`
+		NativeLanguage string    `json:"native_lang"`
+		TargetLang     string    `json:"target_lang"`
+		Meaning        string    `json:"word_in_native"`
+		Word           string    `json:"word_in_target"`
+		UsageExamples  []string  `json:"usage"`
 	}
 
 	Deck struct {
@@ -57,5 +59,12 @@ func UserFromPG(user postgresql.User) *User {
 		Id:       user.ID,
 		Login:    user.Login.String,
 		Password: user.Password.String,
+	}
+}
+
+func (u *User) ToModel() *models.User {
+	return &models.User{
+		Id:    u.Id,
+		Login: u.Login,
 	}
 }

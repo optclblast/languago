@@ -12,6 +12,7 @@ const (
 	CodeInternalServerError Code = 500
 	CodeBadRequest          Code = 400
 	CodeNotFound            Code = 404
+	CodeUnauthorized        Code = 401
 )
 
 var (
@@ -19,6 +20,8 @@ var (
 	ErrNotFound            = New(CodeNotFound, "Not Found")
 	ErrValidation          = New(CodeBadRequest, "Validation Error")
 	ErrBadRequest          = New(CodeBadRequest, "BadRequest")
+	ErrInvalidToken        = New(CodeUnauthorized, "Invalid Token")
+	ErrUnauthorized        = New(CodeUnauthorized, "Unauthorized")
 )
 
 type Code uint64

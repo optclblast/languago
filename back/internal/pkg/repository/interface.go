@@ -13,6 +13,13 @@ import (
 )
 
 type (
+	UserRepository interface {
+		CreateUser(ctx context.Context, arg CreateUserParams) error
+		UpdateUser(ctx context.Context, arg UpdateUserParams) error
+		DeleteUser(ctx context.Context, userID uuid.UUID) error
+		SelectUser(ctx context.Context, arg SelectUserParams) (*entities.User, error)
+	}
+
 	// Storage interface provides an abstraction over particular database used by node
 	Storage interface {
 		// Ping func

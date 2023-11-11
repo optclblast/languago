@@ -3,6 +3,7 @@ package users
 import (
 	"context"
 	"fmt"
+	"languago/internal/pkg/ctxtools"
 	"languago/internal/pkg/logger"
 	"languago/internal/pkg/models/requests/rest"
 	"languago/internal/pkg/repository"
@@ -33,7 +34,11 @@ func NewUsersController(
 }
 
 func (c *usersController) CreateUser(ctx context.Context, req *rest.SignUpRequest) error {
-	userID := uuid.New()
+	userID := ctxtools.UserID(ctx)
+	if userID == uuid.Nil {
+		return fmt.Errorf("error fetch user id from context")
+	}
+
 	err := c.storage.Database().CreateUser(ctx, repository.CreateUserParams{
 		ID:       userID,
 		Login:    req.Login,

@@ -43,3 +43,38 @@ func NewPairs() logger.LogFields {
 	}
 	return pairs
 }
+
+func RandInt() int64 {
+	n := rand.Int63()
+	if n%2 > 0 {
+		return -n
+	}
+
+	return n
+}
+
+func RandStringSlice(min, max int) []string {
+	var size int64
+	for {
+		size = rand.Int63n(int64(max))
+		if size >= int64(min) {
+			break
+		}
+	}
+
+	var (
+		i   int64
+		arr []string = make([]string, 0, size)
+	)
+
+	for i = 0; i < size; i++ {
+		arr = append(
+			arr,
+			RandStringRunes(
+				int(rand.Int63n(int64(25))),
+			),
+		)
+	}
+
+	return arr
+}

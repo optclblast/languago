@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"languago/internal/pkg/models/entities"
+	"languago/test/generators"
+	"math/rand"
 
 	"github.com/google/uuid"
 )
@@ -39,7 +41,22 @@ func (s *mockStorage) UpdateFlashcard(ctx context.Context, arg UpdateFlashcardPa
 }
 func (s *mockStorage) DeleteFlashcard(ctx context.Context, cardID uuid.UUID) error { return nil }
 func (s *mockStorage) SelectFlashcard(ctx context.Context, arg SelectFlashcardParams) ([]*entities.Flashcard, error) {
-	return nil, nil
+	len := rand.Intn(20)
+	resp := make([]*entities.Flashcard, 0, len)
+
+	for i := 0; i < len; i++ {
+		card := entities.Flashcard{
+			ID:             uuid.New(),
+			NativeLanguage: generators.RandStringRunes(10),
+			TargetLang:     generators.RandStringRunes(10),
+			Meaning:        generators.RandStringRunes(10),
+			Word:           generators.RandStringRunes(10),
+			UsageExamples:  generators.RandStringSlice(5, 15),
+		}
+		resp = append(resp, &card)
+	}
+
+	return resp, nil
 }
 
 func (s *mockStorage) CreateDeck(ctx context.Context, arg CreateDeckParams) error { return nil }
