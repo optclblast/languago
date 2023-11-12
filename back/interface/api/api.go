@@ -44,6 +44,7 @@ func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInter
 	errorsPresenter := errors2.NewErrorPresenter(logger)
 
 	api := API{
+		ID:              uuid.New(),
 		Repo:            interactor,
 		log:             logger,
 		errorsPresenter: errorsPresenter,

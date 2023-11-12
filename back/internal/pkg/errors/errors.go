@@ -28,18 +28,18 @@ var (
 type Code int
 
 type serviceError struct {
-	ServiceName string
-	ServiceID   uuid.UUID
-	Code        Code
-	Message     string
-	Err         error
+	serviceName string
+	serviceID   uuid.UUID
+	Code        Code   `json:"code"`
+	Message     string `json:"message"`
+	Err         error  `json:"error,omitempty"`
 }
 
 func (e serviceError) Error() string {
 	return fmt.Sprintf(
 		"ServiceID: [%v] ServiceName: [%s] Message: %s Error: %s",
-		e.ServiceID,
-		e.ServiceName,
+		e.serviceID,
+		e.serviceName,
 		e.Message,
 		e.Err.Error(),
 	)
@@ -112,13 +112,13 @@ func (e *errorPresenter) mapError(err error) error {
 
 func ErrorServiceID(serviceID uuid.UUID) ServiceErrorOption {
 	return func(e *serviceError) {
-		e.ServiceID = serviceID
+		e.serviceID = serviceID
 	}
 }
 
 func ErrorServiceName(name string) ServiceErrorOption {
 	return func(e *serviceError) {
-		e.ServiceName = name
+		e.serviceName = name
 	}
 }
 
