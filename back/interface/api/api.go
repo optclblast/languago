@@ -2,13 +2,15 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
 	"languago/internal/pkg/auth"
 	"languago/internal/pkg/config"
 	"languago/internal/pkg/controllers/flashcards"
 	"languago/internal/pkg/controllers/users"
+	"languago/internal/pkg/ctxtools"
 	errors2 "languago/internal/pkg/errors"
 	"languago/internal/pkg/http/middleware"
 	"languago/internal/pkg/logger"
@@ -26,6 +28,7 @@ import (
 
 type (
 	API struct {
+		ID uuid.UUID
 		*chi.Mux
 		Repo            repository.DatabaseInteractor
 		log             logger.Logger
@@ -83,14 +86,14 @@ func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInter
 
 const (
 	// https://dictionaryapi.dev/ API docs
-	dictionaryapi = "https://api.dictionaryapi.dev/api/v2/"
+	// dictionaryapi = "https://api.dictionaryapi.dev/api/v2/"
 	// random word api
 	randomwordapi = "http://random-words-api.vercel.app/word"
 	// word types
-	Noun      = 0
-	Verb      = 1
-	Adjective = 2
-	Any       = 3
+	// Noun      = 0
+	// Verb      = 1
+	// Adjective = 2
+	// Any       = 3
 )
 
 func (a *API) signUpHandler(w http.ResponseWriter, r *http.Request) {
@@ -100,33 +103,24 @@ func (a *API) signUpHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	if err != nil {
-		a.Response(
-			w,
-			fmt.Errorf("error read request body: %w", err),
-			http.StatusInternalServerError,
-		)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(a.responseError("error read request body", err, http.StatusInternalServerError))
 		return
 	}
 
 	err = json.Unmarshal(rawBody, &req)
 	if err != nil {
-		a.Response(
-			w,
-			fmt.Errorf("error read request body: %w", err),
-			http.StatusInternalServerError,
-		)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(a.responseError("error bind request body to request model", err, http.StatusBadRequest))
 		return
 	}
 
-	ctx, close := context.WithTimeout(r.Context(), 500*time.Second)
+	ctx, close := context.WithTimeout(r.Context(), 5*time.Second)
 	defer close()
 	err = a.usersController.CreateUser(ctx, req)
 	if err != nil {
-		a.Response(
-			w,
-			fmt.Errorf("error create user: %w", err),
-			http.StatusInternalServerError,
-		)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(a.responseError("error create user", err, http.StatusInternalServerError))
 		return
 	}
 
@@ -136,28 +130,37 @@ func (a *API) signUpHandler(w http.ResponseWriter, r *http.Request) {
 func (a *API) randomWordHandler(w http.ResponseWriter, r *http.Request) {
 	resp, err := http.Get(randomwordapi)
 	if err != nil {
-		a.Response(
-			w,
-			fmt.Errorf("error getting response from %s: %w", randomwordapi, err),
-			http.StatusInternalServerError,
-		)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(a.responseError("error get random word", err, http.StatusInternalServerError))
 		return
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		a.Response(
-			w,
-			fmt.Errorf("error reading response body from %s: %w", randomwordapi, err),
-			http.StatusInternalServerError,
-		)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(a.responseError("error read request body", err, http.StatusInternalServerError))
 		return
 	}
 
 	a.log.Debug(string(body), nil)
 	w.WriteHeader(http.StatusOK)
-	w.Write(body)
+	_, err = w.Write(body)
+	if err != nil {
+		a.log.Error("error write to connection", logger.LogFields{
+			"datetime":     time.Now(),
+			"request_id":   ctxtools.RequestId(r.Context()),
+			"scheme":       r.URL.Scheme,
+			"method":       r.Method,
+			"path":         r.URL.Path,
+			"remote_addr":  r.RemoteAddr,
+			"host":         r.Host,
+			"user_agent":   r.UserAgent(),
+			"referer":      r.Referer(),
+			"content_type": r.Header.Get("Content-Type"),
+			"error":        err,
+		})
+	}
 }
 
 func (a *API) newFlashcardHandler(w http.ResponseWriter, r *http.Request) {
@@ -166,11 +169,13 @@ func (a *API) newFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	if err != nil {
-		a.Response(w, fmt.Errorf("error reading request body: %w", err), http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(a.responseError("error read request body", err, http.StatusInternalServerError))
 		return
 	}
 	if err = json.Unmarshal(body, &req); err != nil {
-		a.Response(w, fmt.Errorf("error parsing request body: %w", err), http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(a.responseError("error bind request body to a request model", err, http.StatusBadRequest))
 		return
 	}
 
@@ -179,11 +184,12 @@ func (a *API) newFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 
 	err = a.flashcardsController.CreateFlashcard(ctx, req)
 	if err != nil {
-		a.Response(w, fmt.Errorf("internal server error"), http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(a.responseError("error create flashcard", err, http.StatusInternalServerError))
 		return
 	}
 
-	a.Response(w, nil, http.StatusOK)
+	w.WriteHeader(http.StatusOK)
 }
 
 func (a *API) getFlashcardHandler(w http.ResponseWriter, r *http.Request) {
@@ -202,26 +208,30 @@ func (a *API) getFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 	if id != "" {
 		id, err := uuid.Parse(id)
 		if err != nil {
-			a.Response(w, err, http.StatusBadRequest)
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write(a.responseError("error parse card id", err, http.StatusBadRequest))
 			return
 		}
 		cards, err := a.Repo.Database().SelectFlashcard(ctx, repository.SelectFlashcardParams{
 			ID: id,
 		})
 		if err != nil {
-			a.Response(w, err, http.StatusBadRequest)
-			return
-		}
+			if errors.Is(err, sql.ErrNoRows) {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write(a.responseError("not found", errors2.ErrNotFound, http.StatusNotFound))
+				return
+			}
 
-		if cards == nil {
-			a.Response(w, nil, http.StatusNotFound)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write(a.responseError("error select flashcard", err, http.StatusInternalServerError))
 			return
 		}
 
 		response.Flashcards = cards
 		resp, err := json.Marshal(response)
 		if err != nil {
-			a.Response(w, fmt.Errorf("internal error"), http.StatusBadRequest)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write(a.responseError("error marshal response body", err, http.StatusInternalServerError))
 			return
 		}
 
@@ -230,7 +240,8 @@ func (a *API) getFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 	} else if deckId != "" {
 		deckId, err := uuid.Parse(deckId)
 		if err != nil {
-			a.Response(w, err, http.StatusBadRequest)
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write(a.responseError("error parse deck id", err, http.StatusBadRequest))
 			return
 		}
 		if word != "" {
@@ -239,24 +250,23 @@ func (a *API) getFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 				Word:   word,
 			})
 			if err != nil {
-				a.Response(w, err, http.StatusBadRequest)
-				return
-			}
+				if errors.Is(err, sql.ErrNoRows) {
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write(a.responseError("not found", errors2.ErrNotFound, http.StatusNotFound))
+					return
+				}
 
-			if cards == nil {
-				a.Response(w, nil, http.StatusNotFound)
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write(a.responseError("error select flashcard", err, http.StatusInternalServerError))
 				return
 			}
 
 			response.Flashcards = cards
-			if err != nil {
-				a.Response(w, fmt.Errorf("empty flashcard"), http.StatusBadRequest)
-				return
-			}
 
 			resp, err := json.Marshal(response)
 			if err != nil {
-				a.Response(w, fmt.Errorf("internal error"), http.StatusBadRequest)
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write(a.responseError("error marshal response body", err, http.StatusInternalServerError))
 				return
 			}
 			w.WriteHeader(http.StatusOK)
@@ -267,28 +277,36 @@ func (a *API) getFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 				Meaning: meaning,
 			})
 			if err != nil {
-				a.Response(w, err, http.StatusBadRequest)
-				return
-			}
+				if errors.Is(err, sql.ErrNoRows) {
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write(a.responseError("not found", errors2.ErrNotFound, http.StatusNotFound))
+					return
+				}
 
-			if cards == nil {
-				a.Response(w, nil, http.StatusNotFound)
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write(a.responseError("error select flashcard", err, http.StatusInternalServerError))
 				return
 			}
 
 			response.Flashcards = cards
+
+			resp, err := json.Marshal(response)
 			if err != nil {
-				a.Response(w, fmt.Errorf("empty flashcard"), http.StatusBadRequest)
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write(a.responseError("error marshal response body", err, http.StatusInternalServerError))
 				return
 			}
 
-			a.Response(w, response, http.StatusOK)
+			w.WriteHeader(http.StatusOK)
+			w.Write(resp)
 		} else {
-			a.Response(w, nil, http.StatusBadRequest)
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write(a.responseError("error missing required fields", nil, http.StatusBadRequest))
 			return
 		}
 	} else {
-		a.Response(w, nil, http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(a.responseError("error missing required fields", nil, http.StatusBadRequest))
 		return
 	}
 }
@@ -297,7 +315,8 @@ func (a *API) deleteFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	uuid, err := uuid.Parse(id)
 	if err != nil {
-		a.Response(w, err, http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(a.responseError("error parse card id", err, http.StatusBadRequest))
 		return
 	}
 
@@ -306,7 +325,8 @@ func (a *API) deleteFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 
 	err = a.Repo.Database().DeleteFlashcard(ctx, uuid)
 	if err != nil {
-		a.Response(w, err, http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(a.responseError("error delete flashcard", err, http.StatusInternalServerError))
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -318,12 +338,14 @@ func (a *API) editFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	if err != nil {
-		a.Response(w, fmt.Errorf("error reading request body: %w", err), http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(a.responseError("error read card body", err, http.StatusBadRequest))
 		return
 	}
 
 	if err = json.Unmarshal(body, &request); err != nil {
-		a.Response(w, fmt.Errorf("error parsing request body: %w", err), http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(a.responseError("error bind request body to a request model", err, http.StatusBadRequest))
 		return
 	}
 
@@ -332,7 +354,8 @@ func (a *API) editFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 
 	id, err := uuid.Parse(request.Id)
 	if err != nil {
-		a.Response(w, fmt.Errorf("error invalid id: %w", err), http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(a.responseError("error parse flashcard uuid", err, http.StatusBadRequest))
 		return
 	}
 	params := repository.UpdateFlashcardParams{
@@ -347,33 +370,17 @@ func (a *API) editFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 	case request.UsageExamples != nil:
 		params.Usage = request.UsageExamples
 	default:
-		a.responseError(w, nil, http.StatusExpectationFailed)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(a.responseError("error missing required fields", err, http.StatusBadRequest))
 		return
 	}
 
 	err = a.Repo.Database().UpdateFlashcard(ctx, params)
 	if err != nil {
-		a.Response(w, fmt.Errorf("error editing flashcard: %w", err), http.StatusBadRequest)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(a.responseError("error update flashcard", err, http.StatusInternalServerError))
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-}
-
-func (a *API) Response(w http.ResponseWriter, resp any, status int) {
-	if status != 200 {
-		a.responseError(w, resp.(error), status)
-		return
-	}
-
-	w.Header().Add("Content-Type", "application/json")
-
-	respRaw, err := json.Marshal(resp)
-	if err != nil {
-		a.responseError(w, fmt.Errorf("internal error"), http.StatusBadRequest)
-		return
-	}
-
-	w.WriteHeader(status)
-	w.Write(respRaw)
 }

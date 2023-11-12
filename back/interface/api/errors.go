@@ -2,32 +2,21 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
+	"languago/internal/pkg/errors"
 	"languago/internal/pkg/logger"
-	"languago/internal/pkg/models/requests/rest"
-	"net/http"
 )
 
-func (a *API) responseError(w http.ResponseWriter, e error, code int) error {
-	a.log.Warn(logger.ErrorField, logger.LogFieldPair(logger.ErrorField, e))
-	resp := rest.NewFlashcardResponse{
-		Errors: []string{e.Error()},
-	}
-	body, err := json.Marshal(resp)
+func (a *API) responseError(msg string, e error, code int) []byte {
+	err := a.errorsPresenter.ServiceError(
+		e,
+		errors.ErrorServiceID(a.ID),
+		errors.ErrorServiceErr(errors.New(errors.Code(code), msg)),
+	)
+
+	body, err := json.Marshal(a.errorsPresenter.ResponseError(err))
 	if err != nil {
-		a.log.Warn("error responding to request: ", logger.LogFieldPair(logger.ErrorField, err))
-		return fmt.Errorf("error responding ro request: %w", err)
+		a.log.Error("error responding to request: ", logger.LogFieldPair(logger.ErrorField, err))
 	}
 
-	if e != nil {
-		w.WriteHeader(http.StatusBadRequest)
-	} else {
-		w.WriteHeader(http.StatusBadRequest)
-	}
-	_, err = w.Write(body)
-	if err != nil {
-		a.log.Warn("error responding to request: ", logger.LogFieldPair(logger.ErrorField, err))
-		return fmt.Errorf("error responding ro request: %w", err)
-	}
-	return nil
+	return body
 }

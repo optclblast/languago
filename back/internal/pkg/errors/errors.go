@@ -1,6 +1,7 @@
 package errors
 
 import (
+	"errors"
 	"fmt"
 	"languago/internal/pkg/logger"
 
@@ -24,7 +25,7 @@ var (
 	ErrUnauthorized        = New(CodeUnauthorized, "Unauthorized")
 )
 
-type Code uint64
+type Code int
 
 type serviceError struct {
 	ServiceName string
@@ -36,7 +37,7 @@ type serviceError struct {
 
 func (e serviceError) Error() string {
 	return fmt.Sprintf(
-		"ServiceID: [%v] ServiceName: %s Message: %s Error: %s",
+		"ServiceID: [%v] ServiceName: [%s] Message: %s Error: %s",
 		e.ServiceID,
 		e.ServiceName,
 		e.Message,
@@ -44,12 +45,24 @@ func (e serviceError) Error() string {
 	)
 }
 
+// Returns bare service error. Can be modified using FOP
 func New(code Code, msg string, parent ...error) error {
-	return nil
+	if parent == nil {
+		return serviceError{
+			Code:    code,
+			Message: msg,
+		}
+	}
+
+	return serviceError{
+		Code:    code,
+		Message: msg,
+		Err:     errors.Join(parent...),
+	}
 }
 
 type ErrorsPersenter interface {
-	ServiceError(opts ...ServiceErrorOption) error
+	ServiceError(be error, opts ...ServiceErrorOption) error
 	ResponseError(err error) error
 }
 
@@ -62,13 +75,17 @@ func NewErrorPresenter(log logger.Logger) ErrorsPersenter {
 }
 
 func (e *errorPresenter) ResponseError(err error) error {
-	return nil
+	return e.mapError(err)
 }
 
 type ServiceErrorOption func(e *serviceError)
 
-func (e *errorPresenter) ServiceError(opts ...ServiceErrorOption) error {
+func (e *errorPresenter) ServiceError(be error, opts ...ServiceErrorOption) error {
 	var err serviceError
+	if serr, ok := be.(serviceError); ok {
+		err = serr
+	}
+
 	for _, option := range opts {
 		option(&err)
 	}
@@ -77,7 +94,20 @@ func (e *errorPresenter) ServiceError(opts ...ServiceErrorOption) error {
 }
 
 func (e *errorPresenter) mapError(err error) error {
-	return nil
+	switch {
+	case errors.Is(err, ErrBadRequest):
+		return ErrBadRequest
+	case errors.Is(err, ErrInternalServerError):
+		return ErrInternalServerError
+	case errors.Is(err, ErrInvalidToken):
+		return ErrUnauthorized
+	case errors.Is(err, ErrUnauthorized):
+		return ErrUnauthorized
+	case errors.Is(err, ErrValidation):
+		return ErrBadRequest
+	default:
+		return ErrInternalServerError
+	}
 }
 
 func ErrorServiceID(serviceID uuid.UUID) ServiceErrorOption {

@@ -159,7 +159,22 @@ func (m *middleware) Recovery(next http.Handler) http.Handler {
 
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write(jsonBody)
+				_, err := w.Write(jsonBody)
+				if err != nil {
+					m.log.Error("error write to connection", logger.LogFields{
+						"datetime":     time.Now(),
+						"request_id":   ctxtools.RequestId(r.Context()),
+						"scheme":       r.URL.Scheme,
+						"method":       r.Method,
+						"path":         r.URL.Path,
+						"remote_addr":  r.RemoteAddr,
+						"host":         r.Host,
+						"user_agent":   r.UserAgent(),
+						"referer":      r.Referer(),
+						"content_type": r.Header.Get("Content-Type"),
+						"error":        err,
+					})
+				}
 			}
 		}()
 
