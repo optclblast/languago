@@ -67,6 +67,7 @@ func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInter
 	))
 
 	router.Use(chimw.RequestID)
+	router.Use(mw.Options)
 	router.Use(mw.LoggingMiddleware)
 	router.Use(mw.AuthMiddleware)
 	router.Use(mw.Recovery)

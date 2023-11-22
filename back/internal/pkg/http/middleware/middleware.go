@@ -127,6 +127,15 @@ func (m *middleware) RequestValidationMiddleware(next http.Handler) http.Handler
 	})
 }
 
+func (m *middleware) Options(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+	})
+}
+
 func (m *middleware) LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		m.logRequest(r, "[ REQUEST_LOG ]", false)
@@ -198,6 +207,7 @@ func (m *middleware) logRequest(r *http.Request, mw string, err bool) {
 		"request_id":   ctxtools.RequestId(r.Context()),
 		"scheme":       r.URL.Scheme,
 		"method":       r.Method,
+		"body":         r.Body,
 		"path":         r.URL.Path,
 		"remote_addr":  r.RemoteAddr,
 		"host":         r.Host,

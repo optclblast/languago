@@ -20,30 +20,31 @@ type (
 		SelectUser(ctx context.Context, arg SelectUserParams) (*entities.User, error)
 	}
 
-	// Storage interface provides an abstraction over particular database used by node
-	Storage interface {
-		// Ping func
-		PingDB() error
-		Close() error
-
-		CreateUser(ctx context.Context, arg CreateUserParams) error
-		UpdateUser(ctx context.Context, arg UpdateUserParams) error
-		DeleteUser(ctx context.Context, userID uuid.UUID) error
-		SelectUser(ctx context.Context, arg SelectUserParams) (*entities.User, error)
-
+	FlashcardRepository interface {
 		CreateFlashcard(ctx context.Context, arg CreateFlashcardParams) error
 		UpdateFlashcard(ctx context.Context, arg UpdateFlashcardParams) error
 		DeleteFlashcard(ctx context.Context, cardID uuid.UUID) error
 		SelectFlashcard(ctx context.Context, arg SelectFlashcardParams) ([]*entities.Flashcard, error)
+	}
 
+	DeckRepository interface {
 		CreateDeck(ctx context.Context, arg CreateDeckParams) error
 		UpdateDeck(ctx context.Context, arg UpdateDeckParams) error
 		DeleteDeck(ctx context.Context, deckID uuid.UUID) error
 		SelectDeck(ctx context.Context, arg SelectDeckParams) (*entities.Deck, error)
-
 		AddToDeck(ctx context.Context, arg AddToDeckParams) error
 		DeleteFromDeck(ctx context.Context, arg DeleteFromDeckParams) error
 		SelectFromDeck(ctx context.Context, arg SelectFromDeckParams) (*entities.Flashcard, error)
+	}
+
+	// Storage interface provides an abstraction over particular database used by node
+	Storage interface {
+		PingDB() error
+		Close() error
+
+		UserRepository
+		FlashcardRepository
+		DeckRepository
 	}
 
 	pgStorage struct {
