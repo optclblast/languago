@@ -2,12 +2,12 @@ package server
 
 import (
 	"fmt"
+	"languago/infrastructure/config"
+	"languago/infrastructure/logger"
+	"languago/infrastructure/repository"
 	"languago/interface/api"
-	"languago/internal/pkg/config"
-	"languago/internal/pkg/logger"
-	"languago/internal/pkg/repository"
 
-	errors2 "languago/internal/pkg/errors"
+	errors2 "languago/pkg/errors"
 	"net/http"
 
 	_ "github.com/lib/pq"

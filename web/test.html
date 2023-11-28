@@ -89,7 +89,7 @@
         <input type="password" id="password" name="password" required>
 
         <button type="submit" id="signinButton">Sign In</button>
-        <button type="submit" id="signupButton">Sign Up</button>
+        <button type="button" id="signupButton">Sign Up</button>
 
         <label>
             <input type="checkbox" checked="checked" name="remember"> Remember me
@@ -114,18 +114,13 @@
         };
 
         const headers = new Headers({
-          "L-Sign-UP": "1234",
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache",
-          "Accept": "*/*",
-          "Connection": "keep-alive"
+          "L-Sign-UP": "1234"
         });
 
         fetch("http://localhost:3300/signin", {
           method: "POST",
           headers: headers,
           body: JSON.stringify(data)
-
         })
         .then(response => response.json())
         .then(data => {
@@ -134,26 +129,15 @@
         .catch(error => {
           console.error("Error:", error);
         });
-
       } else if (event.submitter.id === "signupButton") {
-
         const data = {
           login: login,
           password: password
         };
 
-        const jsonBody = JSON.stringify(jsonData);
-
-        // Send the request with the JSON body
-        xhr.send(jsonBody);
-
-        const headers = {
-          "L-Sign-UP": "1234",
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache",
-          "Accept": "*/*",
-          "Connection": "keep-alive"
-        };
+        const headers = new Headers({
+          "L-Sign-UP": "1234"
+        });
 
         fetch("http://localhost:3300/signup", {
           method: "POST",

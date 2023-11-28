@@ -2,8 +2,7 @@ package api
 
 import (
 	"encoding/json"
-	"languago/internal/pkg/errors"
-	"languago/internal/pkg/logger"
+	"languago/pkg/errors"
 )
 
 func (a *API) responseError(msg string, e error, code int) []byte {
@@ -15,7 +14,7 @@ func (a *API) responseError(msg string, e error, code int) []byte {
 
 	body, err := json.Marshal(a.errorsPresenter.ResponseError(err))
 	if err != nil {
-		a.log.Error("error responding to request: ", logger.LogFieldPair(logger.ErrorField, err))
+		a.log.Error("error responding to request: ", "error: ", err)
 	}
 
 	return body

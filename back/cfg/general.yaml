@@ -19,7 +19,7 @@ database:
 
 # This block specifies the logger and its configuration.
 # logger can be "std" for standard golang log package, 
-# "zap" or "logrus".
+# "zerolog" or "logrus".
 # Set debug true if you want to see .Debug messages in 
 # output. 
 # Output block specifies the output parameters. 

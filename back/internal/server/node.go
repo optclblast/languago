@@ -2,9 +2,9 @@ package server
 
 import (
 	"context"
-	"languago/internal/pkg/config"
-	errors2 "languago/internal/pkg/errors"
-	"languago/internal/pkg/logger"
+	"languago/infrastructure/config"
+	"languago/infrastructure/logger"
+	errors2 "languago/pkg/errors"
 
 	"github.com/google/uuid"
 )
@@ -78,9 +78,7 @@ func NewNode(args *NewNodeParams) Node {
 }
 
 func (n *node) Run() {
-	n.logger.Info("starting the node: ", logger.LogFields{
-		"node_id": n.ID(),
-	})
+	n.logger.Info("starting the node: ", "node_id: ", n.ID())
 
 	for _, s := range n.services {
 		s.Start(n.errorCh)
