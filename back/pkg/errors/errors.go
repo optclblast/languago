@@ -3,9 +3,9 @@ package errors
 import (
 	"errors"
 	"fmt"
-	"languago/infrastructure/logger"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 )
 
 // TODO errors
@@ -67,10 +67,10 @@ type ErrorsPersenter interface {
 }
 
 type errorPresenter struct {
-	log logger.Logger
+	log zerolog.Logger
 }
 
-func NewErrorPresenter(log logger.Logger) ErrorsPersenter {
+func NewErrorPresenter(log zerolog.Logger) ErrorsPersenter {
 	return &errorPresenter{log: log}
 }
 

@@ -14,7 +14,7 @@ func (a *API) responseError(msg string, e error, code int) []byte {
 
 	body, err := json.Marshal(a.errorsPresenter.ResponseError(err))
 	if err != nil {
-		a.log.Error("error responding to request: ", "error: ", err)
+		a.log.Error().Msgf("error responding to request: %v %s", "error: ", err)
 	}
 
 	return body

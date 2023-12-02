@@ -3,12 +3,12 @@ package users
 import (
 	"context"
 	"fmt"
-	"languago/infrastructure/logger"
 	"languago/infrastructure/repository"
 	"languago/pkg/ctxtools"
 	"languago/pkg/models/requests/rest"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 )
 
 type UsersController interface {
@@ -19,12 +19,12 @@ type UsersController interface {
 }
 
 type usersController struct {
-	log     logger.Logger
+	log     zerolog.Logger
 	storage repository.DatabaseInteractor
 }
 
 func NewUsersController(
-	log logger.Logger,
+	log zerolog.Logger,
 	storage repository.DatabaseInteractor,
 ) UsersController {
 	return &usersController{

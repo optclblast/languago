@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"languago/infrastructure/config"
+	"languago/infrastructure/logger"
 	"languago/internal/server"
 	errors2 "languago/pkg/errors"
 	"os/signal"
@@ -36,23 +37,31 @@ func StartApp() error {
 }
 
 func (a *languagoApp) main(ctx context.Context) error {
-	logger := a.config.GetLoggerConfig().GetLogger()
+	log := logger.ProvideLogger(a.config.LoggerCfg)
 
 	node := server.NewNode(&server.NewNodeParams{
-		Logger:          logger,
+		Log:             logger.ProvideLogger(a.config.LoggerCfg),
+		Logger:          a.config.GetLoggerConfig().GetLogger(),
 		Config:          a.config,
-		ErrorsPresenter: errors2.NewErrorPresenter(logger),
+		ErrorsPresenter: errors2.NewErrorPresenter(log),
 	})
 
 	go func() {
 		node.Run()
 	}()
-	<-ctx.Done()
 
-	node.Log().Info("node shutting down", map[string]any{
-		"node_id": node.ID().String(),
-		"time":    time.Now(),
-	})
+	<-ctx.Done()
+	func() {
+		closeTimer := time.AfterFunc(shutdownTimeout, func() {
+			node.Log().Warn().Msg("error node shutdown timeout. stopping node with force")
+			node.Stop(ctx) // todo force
+		})
+		defer closeTimer.Stop()
+
+		node.Stop(ctx)
+	}()
+
+	node.Log().Info().Msgf("node shutting down | node_id: %v time: %v", node.ID().String(), time.Now())
 
 	return nil
 }

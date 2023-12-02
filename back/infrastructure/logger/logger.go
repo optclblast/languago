@@ -1,11 +1,20 @@
 package logger
 
 import (
-	"languago/infrastructure/logger/wrappers"
+	"fmt"
+	"os"
+
+	"github.com/rs/zerolog"
 )
 
 type (
+	// todo just use logrus or zerolog
+
 	abstractLoggerConfig interface {
+		GetLevel() Level
+		GetEnv() EnvParam
+
+		//deprecated
 		GetLogger() Logger
 	}
 
@@ -52,24 +61,27 @@ type (
 	LogFields map[string]interface{}
 )
 
-func ProvideLogger(cfg abstractLoggerConfig) Logger {
-	if cfg == nil {
-		return provideDefaultLogger(false)
+type EnvParam string
+
+const (
+	EnvParam_LOCAL       EnvParam = "local"
+	EnvParam_DEVELOPMENT EnvParam = "development"
+	EnvParam_PRODUCTION  EnvParam = "production"
+)
+
+func ProvideLogger(cfg abstractLoggerConfig) zerolog.Logger {
+	switch cfg.GetEnv() {
+	case EnvParam_LOCAL:
+		consoleWriter := zerolog.ConsoleWriter{Out: os.Stdout}
+		return zerolog.New(consoleWriter).With().Timestamp().Logger().Level(zerolog.Level(cfg.GetLevel()))
+	case EnvParam_DEVELOPMENT:
+		// todo
+	case EnvParam_PRODUCTION:
+		// todo
+	default:
+		fmt.Fprintln(os.Stdout, "fatal error: invalid env parameter")
 	}
 
-	logger := cfg.GetLogger()
-	if logger == nil {
-		return provideDefaultLogger(false)
-	}
-	return logger
-}
-
-func provideDefaultLogger(dbg bool) Logger {
-	return wrappers.NewZerologWrapper(dbg, wrappers.EnvParam_LOCAL)
-}
-
-func LogFieldPair(key string, val any) LogFields {
-	lf := make(LogFields, 0)
-	lf[key] = val
-	return lf
+	consoleWriter := zerolog.ConsoleWriter{Out: os.Stdout}
+	return zerolog.New(consoleWriter).With().Timestamp().Logger().Level(zerolog.Level(cfg.GetLevel()))
 }

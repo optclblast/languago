@@ -7,6 +7,7 @@ import (
 	errors2 "languago/pkg/errors"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 )
 
 type (
@@ -16,7 +17,7 @@ type (
 		Stop(ctx context.Context)
 		SetConfig(cfg config.AbstractNodeConfig)
 		ErrorsPresenter() errors2.ErrorsPersenter
-		Log() logger.Logger
+		Log() *zerolog.Logger
 	}
 
 	Service interface {
@@ -24,15 +25,17 @@ type (
 	}
 
 	node struct {
-		id              uuid.UUID
-		config          config.AbstractNodeConfig
-		logger          logger.Logger
+		id       uuid.UUID
+		config   config.AbstractNodeConfig
+		services Services
+		log      *zerolog.Logger
+
 		errorsPersenter errors2.ErrorsPersenter
-		services        Services
 		errorCh         chan error
-		//closer          closer.Closer
-		//closerCh        chan closer.CloseFunc
-		errorsObserver errors2.ErrorsObserver
+		errorsObserver  errors2.ErrorsObserver
+
+		// deprecated
+		logger logger.Logger
 	}
 
 	StopFunc func(n Node) error
@@ -40,6 +43,7 @@ type (
 
 	NewNodeParams struct {
 		//StopFuncs       []StopFunc
+		Log    zerolog.Logger
 		Logger logger.Logger
 		Config config.AbstractConfig
 		//Closer          closer.Closer
@@ -62,14 +66,14 @@ func NewNode(args *NewNodeParams) Node {
 
 	node := &node{
 		id:              nodeId,
-		logger:          args.Logger,
+		logger:          args.Logger, //todo remove
 		errorsPersenter: args.ErrorsPresenter,
 		services:        services,
 		//closer:          args.Closer,
-		errorsObserver: errors2.NewErrorObserver(args.Logger),
+		errorsObserver: errors2.NewErrorObserver(args.Log),
 	}
 
-	errObserver := errors2.NewErrorObserver(args.Logger)
+	errObserver := errors2.NewErrorObserver(args.Log)
 	errObserver.WatchErrors(node)
 
 	node.LogErrors()
@@ -93,7 +97,9 @@ func (n *node) ID() uuid.UUID { return n.id }
 
 func (n *node) SetConfig(cfg config.AbstractNodeConfig) { n.config = cfg }
 
-func (n *node) Log() logger.Logger { return n.logger }
+func (n *node) Log() *zerolog.Logger {
+	return n.log
+}
 
 func (n *node) ErrorsPresenter() errors2.ErrorsPersenter { return n.errorsPersenter }
 

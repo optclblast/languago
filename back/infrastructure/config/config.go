@@ -30,6 +30,10 @@ type (
 	}
 
 	AbstractLoggerConfig interface {
+		GetLevel() logger.Level
+		GetEnv() logger.EnvParam
+
+		//deprecated
 		GetLogger() logger.Logger
 	}
 
@@ -63,6 +67,8 @@ type (
 	}
 
 	LoggerConfig struct {
+		Env    logger.EnvParam
+		Level  logger.Level
 		Logger logger.Logger
 	}
 )
@@ -142,11 +148,16 @@ func InitialConfiguration() AbstractConfig {
 	dbg := viper.GetBool("logger.debug")
 
 	switch logRaw["logger"] {
+	// todo remove
 	case "logrus":
+		config.LoggerCfg.Level = logger.Level(viper.GetUint32("logger.level"))
+		config.LoggerCfg.Env = envFromConfig(viper.GetString("logger.env"))
+		//deprecated
 		config.LoggerCfg.Logger = wrappers.NewLogrusWrapper(dbg, envValue)
-	case "std":
-		//config.LoggerCfg.Logger = wrappers.NewDefaultLogger(viper.GetBool("logger.debug"))
 	default:
+		config.LoggerCfg.Level = logger.Level(viper.GetUint32("logger.level"))
+		config.LoggerCfg.Env = envFromConfig(viper.GetString("logger.env"))
+		//deprecated
 		config.LoggerCfg.Logger = wrappers.NewZerologWrapper(viper.GetBool("logger.debug"), envValue)
 	}
 
@@ -190,10 +201,32 @@ func (c *LoggerConfig) GetLogger() logger.Logger {
 	return c.Logger
 }
 
+func (c *LoggerConfig) GetLevel() logger.Level {
+	return c.Level
+}
+
+func (c *LoggerConfig) GetEnv() logger.EnvParam {
+	return c.Env
+}
+
 func (c *ServiceConfig) ServiceName() string {
 	return c.Name
 }
 
 func (c *ServiceConfig) GetHTTPAddress() string {
 	return c.Address
+}
+
+func envFromConfig(raw string) logger.EnvParam {
+	switch {
+	case raw == "local":
+		return logger.EnvParam_LOCAL
+	case raw == "development":
+		return logger.EnvParam_DEVELOPMENT
+	case raw == "production":
+		return logger.EnvParam_PRODUCTION
+	default:
+		fmt.Fprintln(os.Stdout, "fatal error: invalid env parameter")
+		return logger.EnvParam_LOCAL
+	}
 }

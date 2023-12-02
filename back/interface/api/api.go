@@ -12,7 +12,6 @@ import (
 	"languago/pkg/auth"
 	"languago/pkg/controllers/flashcards"
 	"languago/pkg/controllers/users"
-	"languago/pkg/ctxtools"
 	errors2 "languago/pkg/errors"
 	"languago/pkg/http/middleware"
 	"languago/pkg/models/requests/rest"
@@ -23,17 +22,19 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 )
 
 type (
 	API struct {
-		ID uuid.UUID
 		*chi.Mux
-		Repo            repository.DatabaseInteractor
-		log             logger.Logger
-		errorsPresenter errors2.ErrorsPersenter
 
+		ID                   uuid.UUID
+		Repo                 repository.DatabaseInteractor
+		log                  zerolog.Logger
+		errorsPresenter      errors2.ErrorsPersenter
 		usersController      users.UsersController
 		flashcardsController flashcards.FlashcardsController
 	}
@@ -66,11 +67,30 @@ func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInter
 		[]byte(os.Getenv("LANGUAGO_SECRET")),
 	))
 
+	router.Use(cors.Handler(cors.Options{
+		AllowedOrigins: []string{"*"},
+		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders: []string{
+			"X-PINGOTHER",
+			"Accept",
+			"Authorization",
+			"Content-Type",
+			"X-CSRF-Token",
+			"X-Requested-With",
+			"Cache-Control",
+			"Connection",
+		},
+		OptionsPassthrough: true,
+		ExposedHeaders:     []string{"Link"},
+		AllowCredentials:   true,
+		MaxAge:             300, // Maximum value not ignored by any of major browsers
+	}))
+
 	router.Use(chimw.RequestID)
-	router.Use(mw.Options)
+	//router.Use(mw.Options)
 	router.Use(mw.LoggingMiddleware)
-	router.Use(mw.AuthMiddleware)
 	router.Use(mw.Recovery)
+	router.Use(mw.AuthMiddleware)
 
 	router.Post("/signup", api.signUpHandler)
 
@@ -145,24 +165,8 @@ func (a *API) randomWordHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.log.Debug(string(body), nil)
 	w.WriteHeader(http.StatusOK)
-	_, err = w.Write(body)
-	if err != nil {
-		a.log.Error("error write to connection", logger.LogFields{
-			"datetime":     time.Now(),
-			"request_id":   ctxtools.RequestId(r.Context()),
-			"scheme":       r.URL.Scheme,
-			"method":       r.Method,
-			"path":         r.URL.Path,
-			"remote_addr":  r.RemoteAddr,
-			"host":         r.Host,
-			"user_agent":   r.UserAgent(),
-			"referer":      r.Referer(),
-			"content_type": r.Header.Get("Content-Type"),
-			"error":        err,
-		})
-	}
+	w.Write(body)
 }
 
 func (a *API) newFlashcardHandler(w http.ResponseWriter, r *http.Request) {

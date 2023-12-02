@@ -3,11 +3,11 @@ package flashcards
 import (
 	"context"
 	"fmt"
-	"languago/infrastructure/logger"
 	"languago/infrastructure/repository"
 	"languago/pkg/models/requests/rest"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 )
 
 type FlashcardsController interface {
@@ -18,12 +18,12 @@ type FlashcardsController interface {
 }
 
 type flashcardController struct {
-	log     logger.Logger
+	log     zerolog.Logger
 	storage repository.DatabaseInteractor
 }
 
 func NewFlashcardsController(
-	log logger.Logger,
+	log zerolog.Logger,
 	storage repository.DatabaseInteractor,
 ) FlashcardsController {
 	return &flashcardController{

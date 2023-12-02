@@ -1,7 +1,7 @@
 package errors
 
 import (
-	"languago/infrastructure/logger"
+	"github.com/rs/zerolog"
 )
 
 type ErrorObservable interface {
@@ -13,20 +13,17 @@ type ErrorsObserver interface {
 }
 
 type errorObserver struct {
-	log logger.Logger
+	log zerolog.Logger
 }
 
-func NewErrorObserver(log logger.Logger) ErrorsObserver {
+func NewErrorObserver(log zerolog.Logger) ErrorsObserver {
 	return &errorObserver{log: log}
 }
 
 func (o *errorObserver) WatchErrors(target ErrorObservable) {
 	go func(target chan error) {
-		for {
-			select {
-			case e := <-target:
-				o.log.Error("error: ", logger.LogFieldPair("", e))
-			}
-		}
+		err := <-target
+		o.log.Error().Msg(err.Error())
+
 	}(target.ErrorChannel())
 }

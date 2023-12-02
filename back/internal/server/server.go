@@ -11,13 +11,14 @@ import (
 	"net/http"
 
 	_ "github.com/lib/pq"
+	"github.com/rs/zerolog"
 )
 
 type (
 	flashcardService struct {
 		API             *api.API
 		address         string
-		log             logger.Logger
+		log             zerolog.Logger
 		errorsPresenter errors2.ErrorsPersenter
 	}
 )
@@ -35,9 +36,7 @@ func NewService(cfg config.AbstractConfig, address string) Service {
 }
 
 func (s *flashcardService) Start(e chan error) {
-	s.log.Info("Starting server", logger.LogFields{
-		"address": s.address,
-	})
+	s.log.Info().Msgf("Starting server at %v", s.address)
 	go s.listen(e)
 }
 
