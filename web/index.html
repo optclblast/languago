@@ -114,14 +114,13 @@
         };
 
         const headers = new Headers({
-          "L-Sign-UP": "1234",
           "Content-Type": "application/json",
           "Cache-Control": "no-cache",
           "Accept": "*/*",
           "Connection": "keep-alive"
         });
 
-        fetch("http://localhost:3300/signin", {
+        fetch("http://localhost:3300/signup", {
           method: "POST",
           headers: headers,
           body: JSON.stringify(data)
@@ -137,7 +136,7 @@
 
       } else if (event.submitter.id === "signupButton") {
 
-        const data = {
+        const jsonData = {
           login: login,
           password: password
         };
