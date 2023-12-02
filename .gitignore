@@ -1,2 +1,3 @@
 .vscode
 ./back/.vscode
+./back/internal/repository/database

@@ -1,14 +1,17 @@
 node: 
-  http_address: "localhost"
-  http_port: "3300"
-  rpc_address: ""
-  rpc_port: ""
+  services:
+    flashcards:
+      address: "localhost"
+      port: "3300"
+
 database: 
+  is_mock: true
   db_address: "localhost:5432"
   db_driver: "postgres"
   db_user: "postgres"
   db_secret: "postgres"
+
 logger:
-  logger: "zap"
+  logger: "logrus"
   debug: true
   env: "local"

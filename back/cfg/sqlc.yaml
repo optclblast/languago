@@ -6,7 +6,7 @@ sql:
     gen:
       go:
         package: "postgresql"
-        out: "../internal/pkg/repository/postgresql"
+        out: "../internal/repository/postgresql"
         emit_db_tags: true
         emit_interface: true
         emit_json_tags: true
@@ -20,7 +20,7 @@ sql:
   #   gen:
   #     go:
   #       package: "mysql"
-  #       out: "../internal/pkg/repository/mysql"
+  #       out: "../internal/repository/mysql"
   #       emit_db_tags: true
   #       emit_interface: true
   #       emit_json_tags: true

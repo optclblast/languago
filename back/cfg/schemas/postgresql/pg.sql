@@ -3,6 +3,7 @@ CREATE TABLE "users" (
   "login" varchar(100),
   "password" text
 );
+ALTER TABLE "users" ADD INDEX "index_users_login" ("login");
 
 CREATE TABLE "flashcards" (
   "id" uuid PRIMARY KEY,
