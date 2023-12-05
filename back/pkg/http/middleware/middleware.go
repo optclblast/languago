@@ -23,15 +23,11 @@ const (
 )
 
 type middleware struct {
-	log  zerolog.Logger
-	auth auth.Authorizer
+	log zerolog.Logger
 }
 
-func NewMiddleware(log zerolog.Logger, auth auth.Authorizer) *middleware {
-	return &middleware{
-		log:  log,
-		auth: auth,
-	}
+func NewMiddleware(log zerolog.Logger) *middleware {
+	return &middleware{log: log}
 }
 
 func (m *middleware) AuthMiddleware(next http.Handler) http.Handler {
@@ -46,11 +42,11 @@ func (m *middleware) AuthMiddleware(next http.Handler) http.Handler {
 				`[ SIGN_UP_REQUEST ] 
 				datetime: %v 
 				request_id: %v 
-				request_id: %v 
 				remote_addr: %v 
 				host: %v 
 				user_agent: %v 
-				referer: %v`, time.Now(),
+				referer: %v`,
+				time.Now(),
 				ctxtools.RequestId(r.Context()),
 				r.RemoteAddr,
 				r.Host,
@@ -64,7 +60,7 @@ func (m *middleware) AuthMiddleware(next http.Handler) http.Handler {
 				context.WithValue(r.Context(), ctxtools.UserIDCtxKey, userID),
 			)
 
-			token, err := m.auth.CreateToken(auth.ClaimJWTParams{
+			token, err := auth.CreateToken(auth.ClaimJWTParams{
 				UserId: userID.String(),
 			})
 			if err != nil {
@@ -95,7 +91,7 @@ func (m *middleware) AuthMiddleware(next http.Handler) http.Handler {
 					if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
 						return nil, errors2.ErrInvalidToken
 					}
-					return m.auth.Secret(), nil
+					return auth.Secret(), nil
 				})
 			if err != nil {
 				m.log.Error().Msgf("error parse token: %v", logger.LogFields{
@@ -111,7 +107,7 @@ func (m *middleware) AuthMiddleware(next http.Handler) http.Handler {
 				return
 			}
 
-			user, err := m.auth.Authorize(token)
+			user, err := auth.Authorize(token)
 			if err != nil {
 				m.log.Error().Msgf("error auth: %v", logger.LogFields{
 					"datetime":    time.Now(),
@@ -152,20 +148,20 @@ func (m *middleware) Recovery(next http.Handler) http.Handler {
 		defer func() {
 			err := recover()
 			if err != nil {
-				m.log.Error().Msgf(
-					"fatal error: %v",
-					"datetime", time.Now(),
-					"request_id", ctxtools.RequestId(r.Context()),
-					"scheme", r.URL.Scheme,
-					"method", r.Method,
-					"path", r.URL.Path,
-					"remote_addr", r.RemoteAddr,
-					"host", r.Host,
-					"user_agent", r.UserAgent(),
-					"referer", r.Referer(),
-					"content_type", r.Header.Get("Content-Type"),
-					"error", err,
-				)
+				// m.log.Error().Msgf(
+				// 	"fatal error: %v",
+				// 	"datetime", time.Now(),
+				// 	"request_id", ctxtools.RequestId(r.Context()),
+				// 	"scheme", r.URL.Scheme,
+				// 	"method", r.Method,
+				// 	"path", r.URL.Path,
+				// 	"remote_addr", r.RemoteAddr,
+				// 	"host", r.Host,
+				// 	"user_agent", r.UserAgent(),
+				// 	"referer", r.Referer(),
+				// 	"content_type", r.Header.Get("Content-Type"),
+				// 	"error", err,
+				// )
 
 				jsonBody, _ := json.Marshal(map[string]string{
 					"error": "Internal server error",

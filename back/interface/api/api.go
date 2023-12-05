@@ -14,6 +14,7 @@ import (
 	"languago/pkg/controllers/users"
 	errors2 "languago/pkg/errors"
 	"languago/pkg/http/middleware"
+	"languago/pkg/models/entities"
 	"languago/pkg/models/requests/rest"
 	"os"
 
@@ -31,9 +32,10 @@ type (
 	API struct {
 		*chi.Mux
 
-		ID                   uuid.UUID
-		Repo                 repository.DatabaseInteractor
-		log                  zerolog.Logger
+		ID   uuid.UUID
+		repo repository.DatabaseInteractor
+		log  zerolog.Logger
+		//auth                 auth.Authorizer
 		errorsPresenter      errors2.ErrorsPersenter
 		usersController      users.UsersController
 		flashcardsController flashcards.FlashcardsController
@@ -46,7 +48,7 @@ func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInter
 
 	api := API{
 		ID:              uuid.New(),
-		Repo:            interactor,
+		repo:            interactor,
 		log:             logger,
 		errorsPresenter: errorsPresenter,
 		flashcardsController: flashcards.NewFlashcardsController(
@@ -61,11 +63,13 @@ func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInter
 
 	router := chi.NewRouter()
 
-	mw := middleware.NewMiddleware(api.log, auth.NewAuthorizer(
+	auth.NewAuthorizer(
 		logger,
 		interactor.Database(),
 		[]byte(os.Getenv("LANGUAGO_SECRET")),
-	))
+	)
+
+	mw := middleware.NewMiddleware(api.log)
 
 	router.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
@@ -93,6 +97,7 @@ func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInter
 	router.Use(mw.AuthMiddleware)
 
 	router.Post("/signup", api.signUpHandler)
+	router.Post("/signin", api.signInHandler)
 
 	router.Get("/randomword", api.randomWordHandler)
 
@@ -147,6 +152,68 @@ func (a *API) signUpHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (a *API) signInHandler(w http.ResponseWriter, r *http.Request) {
+	req := new(rest.SignInRequest)
+
+	rawBody, err := io.ReadAll(r.Body)
+	defer r.Body.Close()
+
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(a.responseError("error read request body", err, http.StatusInternalServerError))
+		return
+	}
+
+	err = json.Unmarshal(rawBody, &req)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(
+			a.responseError(
+				"error bind request body to request model", err,
+				http.StatusBadRequest,
+			),
+		)
+		return
+	}
+
+	ctx, close := context.WithTimeout(r.Context(), 5*time.Second)
+	defer close()
+
+	var user *entities.User = new(entities.User)
+
+	err = a.repo.Database().WithTransaction(ctx, nil, func(tx *sql.Tx) error {
+		user, err = a.repo.Database().SelectUser(ctx, repository.SelectUserParams{
+			Login: req.Login,
+		})
+
+		return err
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	a.log.Info().Any("user: ", user)
+
+	// todo password validation
+
+	// token, err := auth.CreateToken(auth.ClaimJWTParams{
+	// 	UserId: user.Id.String(),
+	// })
+	// if err != nil {
+	// 	w.WriteHeader(http.StatusInternalServerError)
+	// 	return
+	// }
+
+	w.WriteHeader(http.StatusOK)
+	//todo return token
 }
 
 func (a *API) randomWordHandler(w http.ResponseWriter, r *http.Request) {
@@ -218,7 +285,7 @@ func (a *API) getFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 			w.Write(a.responseError("error parse card id", err, http.StatusBadRequest))
 			return
 		}
-		cards, err := a.Repo.Database().SelectFlashcard(ctx, repository.SelectFlashcardParams{
+		cards, err := a.repo.Database().SelectFlashcard(ctx, repository.SelectFlashcardParams{
 			ID: id,
 		})
 		if err != nil {
@@ -251,7 +318,7 @@ func (a *API) getFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if word != "" {
-			cards, err := a.Repo.Database().SelectFlashcard(ctx, repository.SelectFlashcardParams{
+			cards, err := a.repo.Database().SelectFlashcard(ctx, repository.SelectFlashcardParams{
 				DeckID: deckId,
 				Word:   word,
 			})
@@ -278,7 +345,7 @@ func (a *API) getFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			w.Write(resp)
 		} else if meaning != "" {
-			cards, err := a.Repo.Database().SelectFlashcard(ctx, repository.SelectFlashcardParams{
+			cards, err := a.repo.Database().SelectFlashcard(ctx, repository.SelectFlashcardParams{
 				DeckID:  deckId,
 				Meaning: meaning,
 			})
@@ -329,7 +396,7 @@ func (a *API) deleteFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, c := context.WithTimeout(context.Background(), 5*time.Second)
 	defer c()
 
-	err = a.Repo.Database().DeleteFlashcard(ctx, uuid)
+	err = a.repo.Database().DeleteFlashcard(ctx, uuid)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write(a.responseError("error delete flashcard", err, http.StatusInternalServerError))
@@ -381,7 +448,7 @@ func (a *API) editFlashcardHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = a.Repo.Database().UpdateFlashcard(ctx, params)
+	err = a.repo.Database().UpdateFlashcard(ctx, params)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write(a.responseError("error update flashcard", err, http.StatusInternalServerError))

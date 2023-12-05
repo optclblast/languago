@@ -2,6 +2,7 @@ package ctxtools
 
 import (
 	"context"
+	"database/sql"
 	"languago/pkg/models"
 
 	chi "github.com/go-chi/chi/v5/middleware"
@@ -11,9 +12,19 @@ import (
 type ContextKey string
 
 var (
-	UserIDCtxKey ContextKey = "user_id"
-	UserCtxKey   ContextKey = "user"
+	UserIDCtxKey         ContextKey = "user_id"
+	UserCtxKey           ContextKey = "user"
+	IsolationLevelCtxKey ContextKey = "isolation_level"
 )
+
+func IsolationLevel(ctx context.Context) sql.IsolationLevel {
+	if v := ctx.Value(chi.RequestIDKey); v != nil {
+		if level, ok := v.(sql.IsolationLevel); ok {
+			return level
+		}
+	}
+	return -1
+}
 
 func RequestId(ctx context.Context) string {
 	if v := ctx.Value(chi.RequestIDKey); v != nil {

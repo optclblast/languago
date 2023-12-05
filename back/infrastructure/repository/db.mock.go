@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"languago/pkg/models/entities"
 	"languago/test/generators"
 	"math/rand"
@@ -13,6 +14,10 @@ type mockStorage struct{}
 
 func _newMockStorage() Storage {
 	return &mockStorage{}
+}
+
+func (s *mockStorage) WithTransaction(ctx context.Context, tx *sql.Tx, txFunc func(*sql.Tx) error) error {
+	return nil
 }
 
 func (s *mockStorage) PingDB() error {

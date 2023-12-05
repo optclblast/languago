@@ -6,14 +6,18 @@ import (
 	"errors"
 	"fmt"
 	"languago/infrastructure/repository/postgresql"
+	"languago/pkg/ctxtools"
 	errors2 "languago/pkg/errors"
 	"languago/pkg/models/entities"
 
 	"github.com/google/uuid"
 )
 
+var globalIsolationLevel sql.IsolationLevel
+
 type (
 	UserRepository interface {
+		Txer
 		CreateUser(ctx context.Context, arg CreateUserParams) error
 		UpdateUser(ctx context.Context, arg UpdateUserParams) error
 		DeleteUser(ctx context.Context, userID uuid.UUID) error
@@ -21,6 +25,7 @@ type (
 	}
 
 	FlashcardRepository interface {
+		Txer
 		CreateFlashcard(ctx context.Context, arg CreateFlashcardParams) error
 		UpdateFlashcard(ctx context.Context, arg UpdateFlashcardParams) error
 		DeleteFlashcard(ctx context.Context, cardID uuid.UUID) error
@@ -28,6 +33,7 @@ type (
 	}
 
 	DeckRepository interface {
+		Txer
 		CreateDeck(ctx context.Context, arg CreateDeckParams) error
 		UpdateDeck(ctx context.Context, arg UpdateDeckParams) error
 		DeleteDeck(ctx context.Context, deckID uuid.UUID) error
@@ -47,14 +53,13 @@ type (
 		DeckRepository
 	}
 
+	Txer interface {
+		WithTransaction(context.Context, *sql.Tx, func(*sql.Tx) error) error
+	}
+
 	pgStorage struct {
 		conn *sql.DB
 		db   *postgresql.Queries
-	}
-
-	mysqlStorage struct {
-		conn *sql.DB
-		//db *mysql.Queries
 	}
 )
 
@@ -64,13 +69,6 @@ func newPGStorage(db *sql.DB) *pgStorage {
 		conn: db,
 		db:   postgresql.New(db),
 	}
-}
-
-func newMySQLStorage(db *sql.DB) *mysqlStorage {
-	return nil
-	// return &mysqlStorage{
-	// 	db: mysql.New(db),
-	// }
 }
 
 func (s *pgStorage) PingDB() error {
@@ -84,7 +82,62 @@ func (s *pgStorage) Close() error {
 	return s.conn.Close()
 }
 
+func (s *pgStorage) WithTransaction(ctx context.Context, tx *sql.Tx, txFunc func(*sql.Tx) error) error {
+	var err error
+
+	defer func() {
+		// context deadline exceeded - try to rollback transaction
+		if _, ok := <-ctx.Done(); !ok && tx != nil {
+			rbErr := tx.Rollback()
+			if rbErr != nil {
+				err = errors.Join(err, rbErr)
+			}
+		}
+	}()
+
+	isolationLevelFn := func() sql.IsolationLevel {
+		if isolationLevel := ctxtools.IsolationLevel(ctx); isolationLevel != -1 {
+			return isolationLevel
+		}
+
+		return globalIsolationLevel
+	}
+
+	var hasExternalTx bool = true
+	if tx == nil {
+
+		isolationLevel := isolationLevelFn()
+
+		tx, err = s.conn.BeginTx(ctx, &sql.TxOptions{
+			Isolation: isolationLevel,
+		})
+		if err != nil {
+			return fmt.Errorf("error begin transaction: %w", err)
+		}
+
+		hasExternalTx = false
+	}
+
+	err = txFunc(tx)
+	if err != nil {
+		return fmt.Errorf("error run transaction function: %w", err)
+	}
+
+	if !hasExternalTx {
+		err = tx.Commit()
+		if err != nil {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				return fmt.Errorf("error rollback transaction: %w", rbErr)
+			}
+			return fmt.Errorf("error commit transaction: %w", err)
+		}
+	}
+
+	return err
+}
+
 func (s *pgStorage) CreateUser(ctx context.Context, arg CreateUserParams) error {
+	// todo move validation from repository
 	if len(arg.Login) < 4 && arg.Password == "" {
 		return fmt.Errorf("error invalid user credentials: %w", ErrInvalidData)
 	}
@@ -102,6 +155,7 @@ func (s *pgStorage) CreateUser(ctx context.Context, arg CreateUserParams) error 
 }
 
 func (s *pgStorage) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
+	// todo move validation from repository
 	if arg.ID == uuid.Nil {
 		return fmt.Errorf("error user id is required")
 	}
@@ -130,6 +184,7 @@ func (s *pgStorage) UpdateUser(ctx context.Context, arg UpdateUserParams) error 
 }
 
 func (s *pgStorage) DeleteUser(ctx context.Context, userID uuid.UUID) error {
+	// todo move validation from repository
 	if userID == uuid.Nil {
 		return fmt.Errorf("error user id is required")
 	}
@@ -168,6 +223,7 @@ func (s *pgStorage) SelectUser(ctx context.Context, arg SelectUserParams) (*enti
 func (s *pgStorage) CreateFlashcard(ctx context.Context, arg CreateFlashcardParams) error { return nil }
 
 func (s *pgStorage) UpdateFlashcard(ctx context.Context, arg UpdateFlashcardParams) error {
+	// todo move validation from repository
 	if arg.ID == uuid.Nil {
 		return fmt.Errorf("error id required")
 	}
@@ -207,6 +263,7 @@ func (s *pgStorage) UpdateFlashcard(ctx context.Context, arg UpdateFlashcardPara
 	return nil
 }
 func (s *pgStorage) DeleteFlashcard(ctx context.Context, cardID uuid.UUID) error {
+	// todo move validation from repository
 	if cardID == uuid.Nil {
 		return fmt.Errorf("error flashcard uuid is required")
 	}
@@ -235,89 +292,5 @@ func (s *pgStorage) SelectDeck(ctx context.Context, arg SelectDeckParams) (*enti
 func (s *pgStorage) AddToDeck(ctx context.Context, arg AddToDeckParams) error           { return nil }
 func (s *pgStorage) DeleteFromDeck(ctx context.Context, arg DeleteFromDeckParams) error { return nil }
 func (s *pgStorage) SelectFromDeck(ctx context.Context, arg SelectFromDeckParams) (*entities.Flashcard, error) {
-	return nil, nil
-}
-
-// Storage implementation for MySQL database
-func (s *mysqlStorage) PingDB() error {
-	if err := s.conn.Ping(); err != nil {
-		s.conn.Close()
-		return fmt.Errorf("error pinging database: %w", err)
-	}
-	return nil
-}
-
-func (s *mysqlStorage) Close() error {
-	return s.conn.Close()
-}
-
-func (s *mysqlStorage) CreateUser(ctx context.Context, arg CreateUserParams) error { return nil }
-func (s *mysqlStorage) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
-	return nil
-}
-func (s *mysqlStorage) DeleteUser(ctx context.Context, userID uuid.UUID) error { return nil }
-func (s *mysqlStorage) SelectUser(ctx context.Context, arg SelectUserParams) (*entities.User, error) {
-	return nil, nil
-}
-
-func (s *mysqlStorage) CreateFlashcard(ctx context.Context, arg CreateFlashcardParams) error {
-	return nil
-}
-
-// Updated the flashcard record. ID must be not nil.
-func (s *mysqlStorage) UpdateFlashcard(ctx context.Context, arg UpdateFlashcardParams) error {
-	// if arg.ID == uuid.Nil {
-	// 	return fmt.Errorf("error id required")
-	// }
-
-	// currentFlashcardState, err := s.db.SelectFlashcardByID(ctx, arg.ID)
-	// if err != nil {
-	// 	return fmt.Errorf("error selecting flashcard: %w", err)
-	// }
-
-	// newVals := &postgresql.UpdateFlashcardParams{
-	// 	Word:    currentFlashcardState.Word,
-	// 	Meaning: currentFlashcardState.Meaning,
-	// 	Usage:   currentFlashcardState.Usage,
-	// 	ID:      currentFlashcardState.ID,
-	// }
-
-	// switch {
-	// case arg.Meaning != "":
-	// 	newVals.Meaning = sql.NullString{String: arg.Meaning, Valid: true}
-	// case arg.Word != "":
-	// 	newVals.Word = sql.NullString{String: arg.Word, Valid: true}
-	// case arg.Usage != nil:
-	// 	newVals.Usage = arg.Usage
-	// default:
-	// 	return nil
-	// }
-
-	// err = s.db.UpdateFlashcard(ctx, *newVals)
-	// if err != nil {
-	// 	return fmt.Errorf("error updating flashcard: %w", err)
-	// }
-
-	return nil
-}
-func (s *mysqlStorage) DeleteFlashcard(ctx context.Context, cardID uuid.UUID) error { return nil }
-func (s *mysqlStorage) SelectFlashcard(ctx context.Context, arg SelectFlashcardParams) ([]*entities.Flashcard, error) {
-	return nil, nil
-}
-
-func (s *mysqlStorage) CreateDeck(ctx context.Context, arg CreateDeckParams) error { return nil }
-func (s *mysqlStorage) UpdateDeck(ctx context.Context, arg UpdateDeckParams) error {
-	return nil
-}
-func (s *mysqlStorage) DeleteDeck(ctx context.Context, deckID uuid.UUID) error { return nil }
-func (s *mysqlStorage) SelectDeck(ctx context.Context, arg SelectDeckParams) (*entities.Deck, error) {
-	return nil, nil
-}
-
-func (s *mysqlStorage) AddToDeck(ctx context.Context, arg AddToDeckParams) error { return nil }
-func (s *mysqlStorage) DeleteFromDeck(ctx context.Context, arg DeleteFromDeckParams) error {
-	return nil
-}
-func (s *mysqlStorage) SelectFromDeck(ctx context.Context, arg SelectFromDeckParams) (*entities.Flashcard, error) {
 	return nil, nil
 }

@@ -65,7 +65,7 @@ func NewDatabaseInteractor(cfg abstractDatabaseConfig) (DatabaseInteractor, erro
 	if driver == "postgres" {
 		interactor.DB = newPGStorage(database)
 	} else if driver == "mysql" {
-		interactor.DB = newMySQLStorage(database)
+		//interactor.DB = newMySQLStorage(database)
 	} else {
 		return nil, fmt.Errorf("error invalid driver %s", driver)
 	}
