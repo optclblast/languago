@@ -29,10 +29,6 @@ type AddToDeckParams struct {
 }
 
 func (c *databaseController) AddToDeck(ctx context.Context, arg AddToDeckParams) error {
-	if arg.DeckID == uuid.Nil || arg.FlashcardID == uuid.Nil {
-		return fmt.Errorf("error missing required params")
-	}
-
 	stmt := sq.Insert("flashcard_decks").Columns(
 		"deck_id", "flashcard_id",
 	).Values(
@@ -55,10 +51,6 @@ type CreateDeckParams struct {
 
 // Decks
 func (c *databaseController) CreateDeck(ctx context.Context, arg CreateDeckParams) error {
-	if arg.ID == uuid.Nil || arg.Owner == uuid.Nil {
-		return fmt.Errorf("error missing required params")
-	}
-
 	_, err := sq.Insert("decks").Columns(
 		"id",
 		"name",
@@ -75,14 +67,6 @@ func (c *databaseController) CreateDeck(ctx context.Context, arg CreateDeckParam
 	return nil
 }
 
-const createFlashcard = `-- name: CreateFlashcard :one
-INSERT INTO flashcards
-    (id, word, meaning, usage)
-    VALUES
-    ($1, $2, $3, $4)
-    RETURNING word, meaning, usage
-`
-
 type CreateFlashcardParams struct {
 	ID      uuid.UUID
 	Word    string
@@ -92,10 +76,6 @@ type CreateFlashcardParams struct {
 
 // Flashcards
 func (c *databaseController) CreateFlashcard(ctx context.Context, arg CreateFlashcardParams) error {
-	if arg.ID == uuid.Nil {
-		return fmt.Errorf("error missing required params")
-	}
-
 	_, err := sq.Insert("flashcards").Columns(
 		"id",
 		"word",
@@ -120,12 +100,7 @@ type CreateUserParams struct {
 	Password string
 }
 
-// User
 func (c *databaseController) CreateUser(ctx context.Context, arg CreateUserParams) error {
-	if arg.ID == uuid.Nil || arg.Login == "" || arg.Password == "" {
-		return fmt.Errorf("error missing required params")
-	}
-
 	_, err := sq.Insert("users").Columns(
 		"id",
 		"login",
@@ -143,20 +118,12 @@ func (c *databaseController) CreateUser(ctx context.Context, arg CreateUserParam
 }
 
 func (c *databaseController) DeleteDeck(ctx context.Context, id uuid.UUID) error {
-	if id == uuid.Nil {
-		return fmt.Errorf("error missing required param")
-	}
-
 	_, err := sq.Delete("decks").Where(sq.Eq{"id": id}).RunWith(c.conn).ExecContext(ctx)
 
 	return err
 }
 
 func (c *databaseController) DeleteFlashcard(ctx context.Context, id uuid.UUID) error {
-	if id == uuid.Nil {
-		return fmt.Errorf("error missing required param")
-	}
-
 	_, err := sq.Delete("flashcards").Where(sq.Eq{"id": id}).RunWith(c.conn).ExecContext(ctx)
 
 	return err
@@ -168,10 +135,6 @@ type DeleteFromDeckParams struct {
 }
 
 func (c *databaseController) DeleteFromDeck(ctx context.Context, arg DeleteFromDeckParams) error {
-	if arg.DeckID == uuid.Nil || arg.FlashcardID == uuid.Nil {
-		return fmt.Errorf("error missing required param")
-	}
-
 	_, err := sq.Delete("flashcard_decks").Where(
 		sq.Eq{"deck_id": arg.DeckID},
 		sq.Eq{"flashcard_id": arg.FlashcardID},
@@ -180,15 +143,13 @@ func (c *databaseController) DeleteFromDeck(ctx context.Context, arg DeleteFromD
 	return err
 }
 
-// const deleteUser = `-- name: DeleteUser :exec
-// DELETE FROM users
-//     WHERE id = $1
-// `
+func (c *databaseController) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	_, err := sq.Delete("users").Where(
+		sq.Eq{"id": id},
+	).RunWith(c.conn).ExecContext(ctx)
 
-// func (c *databaseController) DeleteUser(ctx context.Context, id uuid.UUID) error {
-// 	_, err := c.conn.ExecContext(ctx, deleteUser, id)
-// 	return err
-// }
+	return err
+}
 
 // const editDeckProps = `-- name: EditDeckProps :exec
 // UPDATE decks SET
@@ -196,15 +157,20 @@ func (c *databaseController) DeleteFromDeck(ctx context.Context, arg DeleteFromD
 //     WHERE id = $2
 // `
 
-// type EditDeckPropsParams struct {
-// 	Name sql.NullString `db:"name" json:"name"`
-// 	ID   uuid.UUID      `db:"id" json:"id"`
-// }
+type EditDeckPropsParams struct {
+	Name string
+	ID   uuid.UUID
+}
 
-// func (c *databaseController) EditDeckProps(ctx context.Context, arg EditDeckPropsParams) error {
-// 	_, err := c.conn.ExecContext(ctx, editDeckProps, arg.Name, arg.ID)
-// 	return err
-// }
+func (c *databaseController) EditDeckProps(ctx context.Context, arg EditDeckPropsParams) error {
+	_, err := sq.Update("decks").SetMap(
+		sq.Eq{
+			"name": arg.Name,
+		},
+	).Where(sq.Eq{"id": arg.ID}).RunWith(c.conn).ExecContext(ctx)
+
+	return err
+}
 
 // const selectDeck = `-- name: SelectDeck :one
 // SELECT id, name, owner FROM decks

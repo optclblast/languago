@@ -95,18 +95,16 @@ func (s *pgStorage) WithTransaction(ctx context.Context, tx *sql.Tx, txFunc func
 		}
 	}()
 
-	isolationLevelFn := func() sql.IsolationLevel {
-		if isolationLevel := ctxtools.IsolationLevel(ctx); isolationLevel != -1 {
-			return isolationLevel
-		}
-
-		return globalIsolationLevel
-	}
-
 	var hasExternalTx bool = true
 	if tx == nil {
 
-		isolationLevel := isolationLevelFn()
+		isolationLevel := func() sql.IsolationLevel {
+			if isolationLevel := ctxtools.IsolationLevel(ctx); isolationLevel != -1 {
+				return isolationLevel
+			}
+
+			return globalIsolationLevel
+		}()
 
 		tx, err = s.conn.BeginTx(ctx, &sql.TxOptions{
 			Isolation: isolationLevel,
