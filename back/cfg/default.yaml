@@ -2,14 +2,14 @@ node:
   services:
     flashcards:
       address: "localhost"
-      port: "3300"
+      port: "3301"
 
 database: 
-  is_mock: true
+  is_mock: false
   db_address: "localhost:5432"
   db_driver: "postgres"
-  db_user: "postgres"
-  db_secret: "postgres"
+  db_user: "languago"
+  db_secret: "languago"
 
 logger:
   logger: "logrus"

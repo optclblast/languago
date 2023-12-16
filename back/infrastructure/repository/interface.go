@@ -97,9 +97,8 @@ func (s *pgStorage) WithTransaction(ctx context.Context, tx *sql.Tx, txFunc func
 
 	var hasExternalTx bool = true
 	if tx == nil {
-
 		isolationLevel := func() sql.IsolationLevel {
-			if isolationLevel := ctxtools.IsolationLevel(ctx); isolationLevel != -1 {
+			if isolationLevel, err := ctxtools.IsolationLevel(ctx); err == nil {
 				return isolationLevel
 			}
 
@@ -131,7 +130,7 @@ func (s *pgStorage) WithTransaction(ctx context.Context, tx *sql.Tx, txFunc func
 		}
 	}
 
-	return err
+	return nil
 }
 
 func (s *pgStorage) CreateUser(ctx context.Context, arg CreateUserParams) error {
@@ -199,6 +198,13 @@ func (s *pgStorage) SelectUser(ctx context.Context, arg SelectUserParams) (*enti
 	var user postgresql.User
 	var err error
 
+	err = s.WithTransaction(ctx, nil, func(tx *sql.Tx) error {
+		err = s.db.AddToDeck(ctx, postgresql.AddToDeckParams{})
+		err = s.db.CreateUser(ctx, postgresql.CreateUserParams{})
+
+		return err
+	})
+
 	if arg.ID != uuid.Nil {
 		user, err = s.db.SelectUserByID(ctx, arg.ID)
 		if err != nil {
@@ -218,10 +224,18 @@ func (s *pgStorage) SelectUser(ctx context.Context, arg SelectUserParams) (*enti
 	return entities.UserFromPG(user), nil
 }
 
-func (s *pgStorage) CreateFlashcard(ctx context.Context, arg CreateFlashcardParams) error { return nil }
+func (s *pgStorage) CreateFlashcard(ctx context.Context, args CreateFlashcardParams) error {
+	_, err := s.db.CreateFlashcard(ctx, postgresql.CreateFlashcardParams{
+		ID:      args.ID,
+		Word:    sql.NullString{String: args.Word, Valid: true},
+		Meaning: sql.NullString{String: args.Meaning, Valid: true},
+		Usage:   args.Usage,
+	})
+
+	return err
+}
 
 func (s *pgStorage) UpdateFlashcard(ctx context.Context, arg UpdateFlashcardParams) error {
-	// todo move validation from repository
 	if arg.ID == uuid.Nil {
 		return fmt.Errorf("error id required")
 	}
@@ -261,7 +275,6 @@ func (s *pgStorage) UpdateFlashcard(ctx context.Context, arg UpdateFlashcardPara
 	return nil
 }
 func (s *pgStorage) DeleteFlashcard(ctx context.Context, cardID uuid.UUID) error {
-	// todo move validation from repository
 	if cardID == uuid.Nil {
 		return fmt.Errorf("error flashcard uuid is required")
 	}
@@ -273,22 +286,50 @@ func (s *pgStorage) DeleteFlashcard(ctx context.Context, cardID uuid.UUID) error
 
 	return nil
 }
-func (s *pgStorage) SelectFlashcard(ctx context.Context, arg SelectFlashcardParams) ([]*entities.Flashcard, error) {
 
+func (s *pgStorage) SelectFlashcard(ctx context.Context, arg SelectFlashcardParams) ([]*entities.Flashcard, error) {
+	// switch {
+	// case arg.ID != uuid.Nil:
+	// 	card, err := s.db.SelectFlashcardByID(ctx, arg.ID)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+
+	// 	flashcard, err :=
+	// }
 	return nil, nil
 }
 
-func (s *pgStorage) CreateDeck(ctx context.Context, arg CreateDeckParams) error { return nil }
+func (s *pgStorage) CreateDeck(ctx context.Context, arg CreateDeckParams) error {
+	_, err := s.db.CreateDeck(ctx, postgresql.CreateDeckParams{
+		ID:    arg.ID,
+		Owner: uuid.NullUUID{UUID: arg.Owner, Valid: true},
+		Name:  sql.NullString{String: arg.Name, Valid: true},
+	})
+
+	return err
+}
+
 func (s *pgStorage) UpdateDeck(ctx context.Context, arg UpdateDeckParams) error {
 	return nil
 }
+
 func (s *pgStorage) DeleteDeck(ctx context.Context, deckID uuid.UUID) error { return nil }
+
 func (s *pgStorage) SelectDeck(ctx context.Context, arg SelectDeckParams) (*entities.Deck, error) {
 	return nil, nil
 }
 
-func (s *pgStorage) AddToDeck(ctx context.Context, arg AddToDeckParams) error           { return nil }
+func (s *pgStorage) AddToDeck(ctx context.Context, arg AddToDeckParams) error {
+	err := s.db.AddToDeck(ctx, postgresql.AddToDeckParams{
+		DeckID:      uuid.NullUUID{UUID: arg.DeckID, Valid: true},
+		FlashcardID: uuid.NullUUID{UUID: arg.FlashcardID, Valid: true},
+	})
+	return err
+}
+
 func (s *pgStorage) DeleteFromDeck(ctx context.Context, arg DeleteFromDeckParams) error { return nil }
+
 func (s *pgStorage) SelectFromDeck(ctx context.Context, arg SelectFromDeckParams) (*entities.Flashcard, error) {
 	return nil, nil
 }

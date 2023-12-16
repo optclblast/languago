@@ -1,7 +1,6 @@
 package rest
 
 import (
-	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
 )
 
@@ -11,8 +10,8 @@ type SignUpRequest struct {
 }
 
 type SignUpResponse struct {
-	ID    uuid.UUID  `json:"id"`
-	Token *jwt.Token `json:"token"`
+	ID    uuid.UUID `json:"id"`
+	Token string    `json:"token"`
 }
 
 type SignInRequest struct {

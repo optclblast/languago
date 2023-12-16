@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"encoding/json"
-	"languago/infrastructure/logger"
 	"languago/pkg/auth"
 	"languago/pkg/ctxtools"
 	"net/http"
@@ -38,6 +37,7 @@ func (m *middleware) AuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		if !doAuth(r) {
+			reqID, _ := ctxtools.RequestId(r.Context())
 			m.log.Warn().Msgf(
 				`[ SIGN_UP_REQUEST ] 
 				datetime: %v 
@@ -47,7 +47,7 @@ func (m *middleware) AuthMiddleware(next http.Handler) http.Handler {
 				user_agent: %v 
 				referer: %v`,
 				time.Now(),
-				ctxtools.RequestId(r.Context()),
+				reqID,
 				r.RemoteAddr,
 				r.Host,
 				r.UserAgent(),
@@ -68,20 +68,32 @@ func (m *middleware) AuthMiddleware(next http.Handler) http.Handler {
 				return
 			}
 
+			ctxR = ctxR.WithContext(
+				context.WithValue(ctxR.Context(), ctxtools.TokenCtxKey, token),
+			)
+
 			ctxR.Header.Add(H_Authorization, token)
 
 			next.ServeHTTP(w, ctxR)
 		} else {
 			tokenStr := r.Header.Get(H_Authorization)
+			reqID, _ := ctxtools.RequestId(r.Context())
 			if tokenStr == "" {
-				m.log.Error().Msgf("error auth: %v", logger.LogFields{
-					"datetime":    time.Now(),
-					"request_id":  ctxtools.RequestId(r.Context()),
-					"remote_addr": r.RemoteAddr,
-					"host":        r.Host,
-					"user_agent":  r.UserAgent(),
-					"referer":     r.Referer(),
-				})
+				m.log.Error().Msgf(
+					`[ SIGN_UP_REQUEST ] 
+					datetime: %v 
+					request_id: %v 
+					remote_addr: %v 
+					host: %v 
+					user_agent: %v 
+					referer: %v`,
+					time.Now(),
+					reqID,
+					r.RemoteAddr,
+					r.Host,
+					r.UserAgent(),
+					r.Referer(),
+				)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -94,30 +106,48 @@ func (m *middleware) AuthMiddleware(next http.Handler) http.Handler {
 					return auth.Secret(), nil
 				})
 			if err != nil {
-				m.log.Error().Msgf("error parse token: %v", logger.LogFields{
-					"datetime":    time.Now(),
-					"request_id":  ctxtools.RequestId(r.Context()),
-					"remote_addr": r.RemoteAddr,
-					"host":        r.Host,
-					"user_agent":  r.UserAgent(),
-					"referer":     r.Referer(),
-					"error":       err,
-				})
+				reqID, _ := ctxtools.RequestId(r.Context())
+				m.log.Error().Msgf(
+					`[ SIGN_UP_REQUEST ] 
+					datetime: %v 
+					request_id: %v 
+					remote_addr: %v 
+					host: %v 
+					user_agent: %v 
+					referer: %v
+					error: %w`,
+					time.Now(),
+					reqID,
+					r.RemoteAddr,
+					r.Host,
+					r.UserAgent(),
+					r.Referer(),
+					err,
+				)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 
 			user, err := auth.Authorize(token)
 			if err != nil {
-				m.log.Error().Msgf("error auth: %v", logger.LogFields{
-					"datetime":    time.Now(),
-					"request_id":  ctxtools.RequestId(r.Context()),
-					"remote_addr": r.RemoteAddr,
-					"host":        r.Host,
-					"user_agent":  r.UserAgent(),
-					"referer":     r.Referer(),
-					"error":       err,
-				})
+				reqID, _ := ctxtools.RequestId(r.Context())
+				m.log.Error().Msgf(
+					`[ SIGN_UP_REQUEST ] 
+					datetime: %v 
+					request_id: %v 
+					remote_addr: %v 
+					host: %v 
+					user_agent: %v 
+					referer: %v
+					error: %w`,
+					time.Now(),
+					reqID,
+					r.RemoteAddr,
+					r.Host,
+					r.UserAgent(),
+					r.Referer(),
+					err,
+				)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -184,20 +214,23 @@ func doAuth(r *http.Request) bool {
 		return false
 	}
 
-	// if r.Header[H_SIGN_UP] == testKey && r.Method == http.MethodPost {
-	// 	return false
-	// }
+	if len(r.Header[H_SIGN_UP]) > 0 {
+		if r.Header[H_SIGN_UP][0] == testKey && r.Method == http.MethodPost {
+			return false
+		}
+	}
 
 	//return true
 	return false
 }
 
 func (m *middleware) logRequest(r *http.Request, mw string) {
+	reqID, _ := ctxtools.RequestId(r.Context())
 	m.log.Info().Msgf(
 		"%v", []interface{}{
 			mw,
 			"datetime", time.Now(),
-			"request_id", ctxtools.RequestId(r.Context()),
+			"request_id", reqID,
 			"scheme", r.URL.Scheme,
 			"method", r.Method,
 			"path", r.URL.Path,

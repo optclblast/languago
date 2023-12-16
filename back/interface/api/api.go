@@ -12,6 +12,7 @@ import (
 	"languago/pkg/auth"
 	"languago/pkg/controllers/flashcards"
 	"languago/pkg/controllers/users"
+	"languago/pkg/ctxtools"
 	errors2 "languago/pkg/errors"
 	"languago/pkg/http/middleware"
 	"languago/pkg/models/entities"
@@ -23,7 +24,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )
@@ -71,40 +71,45 @@ func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInter
 
 	mw := middleware.NewMiddleware(api.log)
 
-	router.Use(cors.Handler(cors.Options{
-		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders: []string{
-			"X-PINGOTHER",
-			"Accept",
-			"Authorization",
-			"Content-Type",
-			"X-CSRF-Token",
-			"X-Requested-With",
-			"Cache-Control",
-			"Connection",
-		},
-		OptionsPassthrough: true,
-		ExposedHeaders:     []string{"Link"},
-		AllowCredentials:   true,
-		MaxAge:             300, // Maximum value not ignored by any of major browsers
-	}))
+	// router.Use(cors.Handler(cors.Options{
+	// 	AllowedOrigins: []string{"*"},
+	// 	AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+	// 	AllowedHeaders: []string{
+	// 		"X-PINGOTHER",
+	// 		"Accept",
+	// 		"Authorization",
+	// 		"Content-Type",
+	// 		"X-CSRF-Token",
+	// 		"X-Requested-With",
+	// 		"Cache-Control",
+	// 		"Connection",
+	// 	},
+	// 	OptionsPassthrough: true,
+	// 	ExposedHeaders:     []string{"Link"},
+	// 	AllowCredentials:   true,
+	// 	MaxAge:             300,
+	// }))
 
 	router.Use(chimw.RequestID)
-	//router.Use(mw.Options)
 	router.Use(mw.LoggingMiddleware)
 	router.Use(mw.Recovery)
+
+	generalRouter := chi.NewRouter()
+
 	router.Use(mw.AuthMiddleware)
+	generalRouter.Get("/randomword", api.randomWordHandler)
+	generalRouter.Get("/flashcard", api.getFlashcardHandler)
+	generalRouter.Post("/flashcard", api.newFlashcardHandler)
+	generalRouter.Delete("/flashcard", api.deleteFlashcardHandler)
+	generalRouter.Put("/flashcard", api.editFlashcardHandler)
 
-	router.Post("/signup", api.signUpHandler)
-	router.Post("/signin", api.signInHandler)
+	authRouter := chi.NewRouter()
 
-	router.Get("/randomword", api.randomWordHandler)
+	authRouter.Post("/signup", api.signUpHandler)
+	authRouter.Post("/signin", api.signInHandler)
 
-	router.Get("/flashcard", api.getFlashcardHandler)
-	router.Post("/flashcard", api.newFlashcardHandler)
-	router.Delete("/flashcard", api.deleteFlashcardHandler)
-	router.Put("/flashcard", api.editFlashcardHandler)
+	router.Mount("/auth", authRouter)
+	router.Mount("/", generalRouter)
 
 	api.Mux = router
 
@@ -144,14 +149,46 @@ func (a *API) signUpHandler(w http.ResponseWriter, r *http.Request) {
 
 	ctx, close := context.WithTimeout(r.Context(), 5*time.Second)
 	defer close()
+
 	err = a.usersController.CreateUser(ctx, req)
 	if err != nil {
+		a.log.Error().Msgf("error create user: %s", err.Error())
+
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write(a.responseError("error create user", err, http.StatusInternalServerError))
+		return
+	}
+
+	token, err := ctxtools.Token(ctx)
+	if err != nil {
+		a.log.Error().Msgf("error fetch token from context: %s", err.Error())
+
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	userID, err := ctxtools.UserID(ctx)
+	if err != nil {
+		a.log.Error().Msgf("error fetch user id from context: %s", err.Error())
+
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	resp := rest.SignUpResponse{
+		ID:    userID,
+		Token: token,
+	}
+
+	out, err := json.Marshal(resp)
+	if err != nil {
+		a.log.Error().Msgf("error marshal response: %s", err.Error())
+
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
+	w.Write(out)
 }
 
 func (a *API) signInHandler(w http.ResponseWriter, r *http.Request) {

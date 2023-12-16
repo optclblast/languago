@@ -83,8 +83,8 @@ func databaseConnection(c DBCredentials) (*sql.DB, error) {
 	)
 	switch c.GetDriver() {
 	case "postgres":
-		connStr = fmt.Sprintf("postgresql://%s:%s@%s/%s?sslmode=%s",
-			c.GetUser(), c.GetSecret(), c.GetAddress(), c.GetDBName(), c.GetSSLMode())
+		connStr = fmt.Sprintf("postgresql://%s:%s@%s/%s?sslmode=disable",
+			c.GetUser(), c.GetSecret(), c.GetAddress(), c.GetDBName())
 
 		db, err = sql.Open(c.GetDriver(), connStr)
 		if err != nil {
