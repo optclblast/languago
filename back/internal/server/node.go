@@ -66,7 +66,8 @@ func NewNode(args *NewNodeParams) Node {
 
 	node := &node{
 		id:              nodeId,
-		logger:          args.Logger, //todo remove
+		logger:          args.Logger,
+		log:             &args.Log,
 		errorsPersenter: args.ErrorsPresenter,
 		services:        services,
 		//closer:          args.Closer,
@@ -82,7 +83,7 @@ func NewNode(args *NewNodeParams) Node {
 }
 
 func (n *node) Run() {
-	n.logger.Info("starting the node: ", "node_id: ", n.ID())
+	n.log.Info().Msgf("starting the node: node_id: %v", n.ID())
 
 	for _, s := range n.services {
 		s.Start(n.errorCh)

@@ -7,7 +7,6 @@ import (
 	"languago/pkg/ctxtools"
 	"languago/pkg/models/requests/rest"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )
 
@@ -34,12 +33,12 @@ func NewUsersController(
 }
 
 func (c *usersController) CreateUser(ctx context.Context, req *rest.SignUpRequest) error {
-	userID := ctxtools.UserID(ctx)
-	if userID == uuid.Nil {
-		return fmt.Errorf("error fetch user id from context")
+	userID, err := ctxtools.UserID(ctx)
+	if err != nil {
+		return fmt.Errorf("error fetch user id from context: %w", err)
 	}
 
-	err := c.storage.Database().CreateUser(ctx, repository.CreateUserParams{
+	err = c.storage.Database().CreateUser(ctx, repository.CreateUserParams{
 		ID:       userID,
 		Login:    req.Login,
 		Password: req.Password,

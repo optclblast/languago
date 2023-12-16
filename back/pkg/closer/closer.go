@@ -36,8 +36,8 @@ func (c *closer) Close(ctx context.Context) error {
 	)
 
 	go func() {
-		for _, f := range c.closeFuncs {
-			if err := f(); err != nil {
+		for _, fn := range c.closeFuncs {
+			if err := fn(); err != nil {
 				msgs = append(msgs, err.Error())
 			}
 		}
