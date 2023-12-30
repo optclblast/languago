@@ -6,13 +6,12 @@ import (
 	"languago/pkg/auth"
 	"languago/pkg/ctxtools"
 	"net/http"
-	"time"
 
 	errors2 "languago/pkg/errors"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -22,10 +21,10 @@ const (
 )
 
 type middleware struct {
-	log zerolog.Logger
+	log *logrus.Logger
 }
 
-func NewMiddleware(log zerolog.Logger) *middleware {
+func NewMiddleware(log *logrus.Logger) *middleware {
 	return &middleware{log: log}
 }
 
@@ -38,21 +37,6 @@ func (m *middleware) AuthMiddleware(next http.Handler) http.Handler {
 
 		if !doAuth(r) {
 			reqID, _ := ctxtools.RequestId(r.Context())
-			m.log.Warn().Msgf(
-				`[ SIGN_UP_REQUEST ] 
-				datetime: %v 
-				request_id: %v 
-				remote_addr: %v 
-				host: %v 
-				user_agent: %v 
-				referer: %v`,
-				time.Now(),
-				reqID,
-				r.RemoteAddr,
-				r.Host,
-				r.UserAgent(),
-				r.Referer(),
-			)
 
 			userID := uuid.New()
 
@@ -64,6 +48,7 @@ func (m *middleware) AuthMiddleware(next http.Handler) http.Handler {
 				UserId: userID.String(),
 			})
 			if err != nil {
+				m.log.Errorf("reqID: %s, error: %s", reqID, err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -79,21 +64,7 @@ func (m *middleware) AuthMiddleware(next http.Handler) http.Handler {
 			tokenStr := r.Header.Get(H_Authorization)
 			reqID, _ := ctxtools.RequestId(r.Context())
 			if tokenStr == "" {
-				m.log.Error().Msgf(
-					`[ SIGN_UP_REQUEST ] 
-					datetime: %v 
-					request_id: %v 
-					remote_addr: %v 
-					host: %v 
-					user_agent: %v 
-					referer: %v`,
-					time.Now(),
-					reqID,
-					r.RemoteAddr,
-					r.Host,
-					r.UserAgent(),
-					r.Referer(),
-				)
+				m.log.Errorf("reqID: %s, error: empty token", reqID)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -107,23 +78,7 @@ func (m *middleware) AuthMiddleware(next http.Handler) http.Handler {
 				})
 			if err != nil {
 				reqID, _ := ctxtools.RequestId(r.Context())
-				m.log.Error().Msgf(
-					`[ SIGN_UP_REQUEST ] 
-					datetime: %v 
-					request_id: %v 
-					remote_addr: %v 
-					host: %v 
-					user_agent: %v 
-					referer: %v
-					error: %w`,
-					time.Now(),
-					reqID,
-					r.RemoteAddr,
-					r.Host,
-					r.UserAgent(),
-					r.Referer(),
-					err,
-				)
+				m.log.Errorf("reqID: %s, error: %s", reqID, err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -131,23 +86,7 @@ func (m *middleware) AuthMiddleware(next http.Handler) http.Handler {
 			user, err := auth.Authorize(token)
 			if err != nil {
 				reqID, _ := ctxtools.RequestId(r.Context())
-				m.log.Error().Msgf(
-					`[ SIGN_UP_REQUEST ] 
-					datetime: %v 
-					request_id: %v 
-					remote_addr: %v 
-					host: %v 
-					user_agent: %v 
-					referer: %v
-					error: %w`,
-					time.Now(),
-					reqID,
-					r.RemoteAddr,
-					r.Host,
-					r.UserAgent(),
-					r.Referer(),
-					err,
-				)
+				m.log.Errorf("reqID: %s, error: %s", reqID, err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -166,32 +105,13 @@ func (m *middleware) RequestValidationMiddleware(next http.Handler) http.Handler
 	})
 }
 
-func (m *middleware) LoggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		m.logRequest(r, "[ REQUEST_LOG ]")
-		next.ServeHTTP(w, r)
-	})
-}
-
 func (m *middleware) Recovery(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			err := recover()
 			if err != nil {
-				// m.log.Error().Msgf(
-				// 	"fatal error: %v",
-				// 	"datetime", time.Now(),
-				// 	"request_id", ctxtools.RequestId(r.Context()),
-				// 	"scheme", r.URL.Scheme,
-				// 	"method", r.Method,
-				// 	"path", r.URL.Path,
-				// 	"remote_addr", r.RemoteAddr,
-				// 	"host", r.Host,
-				// 	"user_agent", r.UserAgent(),
-				// 	"referer", r.Referer(),
-				// 	"content_type", r.Header.Get("Content-Type"),
-				// 	"error", err,
-				// )
+				reqID, _ := ctxtools.RequestId(r.Context())
+				m.log.Errorf("reqID: %s, error: %v", reqID, err)
 
 				jsonBody, _ := json.Marshal(map[string]string{
 					"error": "Internal server error",
@@ -222,23 +142,4 @@ func doAuth(r *http.Request) bool {
 
 	//return true
 	return false
-}
-
-func (m *middleware) logRequest(r *http.Request, mw string) {
-	reqID, _ := ctxtools.RequestId(r.Context())
-	m.log.Info().Msgf(
-		"%v", []interface{}{
-			mw,
-			"datetime", time.Now(),
-			"request_id", reqID,
-			"scheme", r.URL.Scheme,
-			"method", r.Method,
-			"path", r.URL.Path,
-			"remote_addr", r.RemoteAddr,
-			"host", r.Host,
-			"user_agent", r.UserAgent(),
-			"referer", r.Referer(),
-			"content_type", r.Header.Get("Content-Type"),
-		},
-	)
 }

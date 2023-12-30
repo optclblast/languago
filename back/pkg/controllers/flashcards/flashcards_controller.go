@@ -7,7 +7,7 @@ import (
 	"languago/pkg/models/requests/rest"
 
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
+	"github.com/sirupsen/logrus"
 )
 
 type FlashcardsController interface {
@@ -18,12 +18,12 @@ type FlashcardsController interface {
 }
 
 type flashcardController struct {
-	log     zerolog.Logger
+	log     *logrus.Logger
 	storage repository.DatabaseInteractor
 }
 
 func NewFlashcardsController(
-	log zerolog.Logger,
+	log *logrus.Logger,
 	storage repository.DatabaseInteractor,
 ) FlashcardsController {
 	return &flashcardController{

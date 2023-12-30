@@ -7,7 +7,7 @@ import (
 	"languago/pkg/ctxtools"
 	"languago/pkg/models/requests/rest"
 
-	"github.com/rs/zerolog"
+	"github.com/sirupsen/logrus"
 )
 
 type UsersController interface {
@@ -18,12 +18,12 @@ type UsersController interface {
 }
 
 type usersController struct {
-	log     zerolog.Logger
+	log     *logrus.Logger
 	storage repository.DatabaseInteractor
 }
 
 func NewUsersController(
-	log zerolog.Logger,
+	log *logrus.Logger,
 	storage repository.DatabaseInteractor,
 ) UsersController {
 	return &usersController{

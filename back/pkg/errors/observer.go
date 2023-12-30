@@ -1,8 +1,6 @@
 package errors
 
-import (
-	"github.com/rs/zerolog"
-)
+import "github.com/sirupsen/logrus"
 
 type ErrorObservable interface {
 	ErrorChannel() chan error
@@ -13,17 +11,17 @@ type ErrorsObserver interface {
 }
 
 type errorObserver struct {
-	log zerolog.Logger
+	log *logrus.Logger
 }
 
-func NewErrorObserver(log zerolog.Logger) ErrorsObserver {
+func NewErrorObserver(log *logrus.Logger) ErrorsObserver {
 	return &errorObserver{log: log}
 }
 
 func (o *errorObserver) WatchErrors(target ErrorObservable) {
 	go func(target chan error) {
 		err := <-target
-		o.log.Error().Msg(err.Error())
+		o.log.Error(err.Error())
 
 	}(target.ErrorChannel())
 }

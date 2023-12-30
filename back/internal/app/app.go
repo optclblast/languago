@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"languago/infrastructure/config"
 	"languago/infrastructure/logger"
-	"languago/internal/server"
-	errors2 "languago/pkg/errors"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const (
-	shutdownTimeout time.Duration = 5 * time.Second
+	shutdownTimeout time.Duration = 10 * time.Second
 )
 
 type languagoApp struct {
@@ -28,40 +28,52 @@ func StartApp() error {
 	)
 	defer stop()
 
-	if config, ok := config.InitialConfiguration().(*config.Config); ok {
-		app := languagoApp{config: config}
-		return app.main(ctx)
-	}
+	config := config.InitialConfiguration()
+	app := languagoApp{config: config}
 
-	return fmt.Errorf("error start application: can't get config")
+	return app.main(ctx)
 }
 
 func (a *languagoApp) main(ctx context.Context) error {
-	log := logger.ProvideLogger(a.config.LoggerCfg)
+	log := logger.ProvideLogger(a.config)
+	log.Info("starting")
 
-	node := server.NewNode(&server.NewNodeParams{
-		Log:             logger.ProvideLogger(a.config.LoggerCfg),
-		Logger:          a.config.GetLoggerConfig().GetLogger(),
-		Config:          a.config,
-		ErrorsPresenter: errors2.NewErrorPresenter(log),
+	consul, _ := config.NewConsulManager("127.0.0.1:8500", "iii", log)
+	consul.RegisterNode(&config.RegisterNodeParams{
+		ID:      fmt.Sprintf("languago-server-%s", uuid.NewString()),
+		Name:    "languago-cluster",
+		Tags:    []string{"languago-server"},
+		Address: "127.0.0.1",
+		Port:    3301,
 	})
 
-	go func() {
-		node.Run()
-	}()
+	consul.DefaultConfiguration()
 
-	<-ctx.Done()
-	func() {
-		closeTimer := time.AfterFunc(shutdownTimeout, func() {
-			node.Log().Warn().Msg("error node shutdown timeout. stopping node with force")
-			node.Stop(ctx) // todo force
-		})
-		defer closeTimer.Stop()
+	time.Sleep(30 * time.Second)
 
-		node.Stop(ctx)
-	}()
+	// node := server.NewNode(&server.NewNodeParams{
+	// 	Version:         a.config.Node.Version,
+	// 	Log:             log,
+	// 	Config:          a.config,
+	// 	ErrorsPresenter: errors2.NewErrorPresenter(log),
+	// })
 
-	node.Log().Info().Msgf("node shutting down | node_id: %v time: %v", node.ID().String(), time.Now())
+	// go func() {
+	// 	node.Run()
+	// }()
+
+	// <-ctx.Done()
+	// func() {
+	// 	closeTimer := time.AfterFunc(shutdownTimeout, func() {
+	// 		node.Log().Warn("error node shutdown timeout. stopping node with force")
+	// 		node.Stop(ctx) // todo force
+	// 	})
+	// 	defer closeTimer.Stop()
+
+	// 	node.Stop(ctx)
+	// }()
+
+	// node.Log().Infof("node shutting down | node_id: %v time: %v", node.ID().String(), time.Now())
 
 	return nil
 }

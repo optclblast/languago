@@ -17,7 +17,7 @@ var globalIsolationLevel sql.IsolationLevel
 
 type (
 	UserRepository interface {
-		Txer
+		TransactionalStorage
 		CreateUser(ctx context.Context, arg CreateUserParams) error
 		UpdateUser(ctx context.Context, arg UpdateUserParams) error
 		DeleteUser(ctx context.Context, userID uuid.UUID) error
@@ -25,7 +25,7 @@ type (
 	}
 
 	FlashcardRepository interface {
-		Txer
+		TransactionalStorage
 		CreateFlashcard(ctx context.Context, arg CreateFlashcardParams) error
 		UpdateFlashcard(ctx context.Context, arg UpdateFlashcardParams) error
 		DeleteFlashcard(ctx context.Context, cardID uuid.UUID) error
@@ -33,7 +33,7 @@ type (
 	}
 
 	DeckRepository interface {
-		Txer
+		TransactionalStorage
 		CreateDeck(ctx context.Context, arg CreateDeckParams) error
 		UpdateDeck(ctx context.Context, arg UpdateDeckParams) error
 		DeleteDeck(ctx context.Context, deckID uuid.UUID) error
@@ -43,7 +43,13 @@ type (
 		SelectFromDeck(ctx context.Context, arg SelectFromDeckParams) (*entities.Flashcard, error)
 	}
 
-	// Storage interface provides an abstraction over particular database used by node
+	DBTX interface {
+		ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
+		PrepareContext(context.Context, string) (*sql.Stmt, error)
+		QueryContext(context.Context, string, ...interface{}) (*sql.Rows, error)
+		QueryRowContext(context.Context, string, ...interface{}) *sql.Row
+	}
+
 	Storage interface {
 		PingDB() error
 		Close() error
@@ -53,50 +59,66 @@ type (
 		DeckRepository
 	}
 
-	Txer interface {
-		WithTransaction(context.Context, *sql.Tx, func(*sql.Tx) error) error
+	TransactionalStorage interface {
+		Conn(ctx context.Context) DBTX
+		WithTransaction(context.Context, func(ctx context.Context) error) error
 	}
 
 	pgStorage struct {
-		conn *sql.DB
-		db   *postgresql.Queries
+		db      *sql.DB
+		querier *postgresql.Queries
 	}
 )
 
 // Storage implementation for PostgreSQL database
 func newPGStorage(db *sql.DB) *pgStorage {
 	return &pgStorage{
-		conn: db,
-		db:   postgresql.New(db),
+		db:      db,
+		querier: postgresql.New(db),
 	}
 }
 
 func (s *pgStorage) PingDB() error {
-	if err := s.conn.Ping(); err != nil {
+	if err := s.db.Ping(); err != nil {
 		return fmt.Errorf("error pinging database: %w", err)
 	}
 	return nil
 }
 
 func (s *pgStorage) Close() error {
-	return s.conn.Close()
+	return s.db.Close()
 }
 
-func (s *pgStorage) WithTransaction(ctx context.Context, tx *sql.Tx, txFunc func(*sql.Tx) error) error {
+type txCtxKey struct{}
+
+func (s *pgStorage) Conn(ctx context.Context) DBTX {
+	if tx, ok := ctx.Value(txCtxKey{}).(*sql.Tx); ok {
+		return tx
+	}
+
+	return s.db
+}
+
+func (s *pgStorage) WithTransaction(ctx context.Context, txFunc func(ctx context.Context) error) error {
 	var err error
+	var tx *sql.Tx = new(sql.Tx)
 
 	defer func() {
-		// context deadline exceeded - try to rollback transaction
-		if _, ok := <-ctx.Done(); !ok && tx != nil {
-			rbErr := tx.Rollback()
-			if rbErr != nil {
-				err = errors.Join(err, rbErr)
+		if err == nil {
+			err = tx.Commit()
+		}
+
+		if err != nil {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				err = fmt.Errorf("error rollback transaction: %w", rbErr)
+				return
 			}
+			err = fmt.Errorf("error commit transaction: %w", err)
+			return
 		}
 	}()
 
-	var hasExternalTx bool = true
-	if tx == nil {
+	if _, ok := ctx.Value(txCtxKey{}).(*sql.Tx); !ok {
 		isolationLevel := func() sql.IsolationLevel {
 			if isolationLevel, err := ctxtools.IsolationLevel(ctx); err == nil {
 				return isolationLevel
@@ -105,32 +127,22 @@ func (s *pgStorage) WithTransaction(ctx context.Context, tx *sql.Tx, txFunc func
 			return globalIsolationLevel
 		}()
 
-		tx, err = s.conn.BeginTx(ctx, &sql.TxOptions{
+		tx, err = s.db.BeginTx(ctx, &sql.TxOptions{
 			Isolation: isolationLevel,
 		})
 		if err != nil {
 			return fmt.Errorf("error begin transaction: %w", err)
 		}
 
-		hasExternalTx = false
+		ctx = context.WithValue(ctx, txCtxKey{}, tx)
 	}
 
-	err = txFunc(tx)
+	err = txFunc(ctx)
 	if err != nil {
 		return fmt.Errorf("error run transaction function: %w", err)
 	}
 
-	if !hasExternalTx {
-		err = tx.Commit()
-		if err != nil {
-			if rbErr := tx.Rollback(); rbErr != nil {
-				return fmt.Errorf("error rollback transaction: %w", rbErr)
-			}
-			return fmt.Errorf("error commit transaction: %w", err)
-		}
-	}
-
-	return nil
+	return err
 }
 
 func (s *pgStorage) CreateUser(ctx context.Context, arg CreateUserParams) error {
@@ -139,7 +151,7 @@ func (s *pgStorage) CreateUser(ctx context.Context, arg CreateUserParams) error 
 		return fmt.Errorf("error invalid user credentials: %w", ErrInvalidData)
 	}
 
-	err := s.db.CreateUser(ctx, postgresql.CreateUserParams{
+	err := s.querier.CreateUser(ctx, postgresql.CreateUserParams{
 		ID:       arg.ID,
 		Login:    sql.NullString{String: arg.Login, Valid: true},
 		Password: sql.NullString{String: arg.Password, Valid: true},
@@ -158,7 +170,7 @@ func (s *pgStorage) UpdateUser(ctx context.Context, arg UpdateUserParams) error 
 	}
 
 	if arg.Login != "" {
-		_, err := s.db.UpdateUserLogin(ctx, postgresql.UpdateUserLoginParams{
+		_, err := s.querier.UpdateUserLogin(ctx, postgresql.UpdateUserLoginParams{
 			ID:    arg.ID,
 			Login: sql.NullString{String: arg.Login, Valid: true},
 		})
@@ -168,7 +180,7 @@ func (s *pgStorage) UpdateUser(ctx context.Context, arg UpdateUserParams) error 
 	}
 
 	if arg.Password != "" {
-		err := s.db.UpdateUserPassword(ctx, postgresql.UpdateUserPasswordParams{
+		err := s.querier.UpdateUserPassword(ctx, postgresql.UpdateUserPasswordParams{
 			ID:       arg.ID,
 			Password: sql.NullString{String: arg.Login, Valid: true},
 		})
@@ -186,7 +198,7 @@ func (s *pgStorage) DeleteUser(ctx context.Context, userID uuid.UUID) error {
 		return fmt.Errorf("error user id is required")
 	}
 
-	err := s.db.DeleteUser(ctx, userID)
+	err := s.querier.DeleteUser(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("error delete user: %w", err)
 	}
@@ -198,22 +210,22 @@ func (s *pgStorage) SelectUser(ctx context.Context, arg SelectUserParams) (*enti
 	var user postgresql.User
 	var err error
 
-	err = s.WithTransaction(ctx, nil, func(tx *sql.Tx) error {
-		err = s.db.AddToDeck(ctx, postgresql.AddToDeckParams{})
-		err = s.db.CreateUser(ctx, postgresql.CreateUserParams{})
+	err = s.WithTransaction(ctx, func(ctx context.Context) error {
+		err = s.querier.AddToDeck(ctx, postgresql.AddToDeckParams{})
+		err = s.querier.CreateUser(ctx, postgresql.CreateUserParams{})
 
 		return err
 	})
 
 	if arg.ID != uuid.Nil {
-		user, err = s.db.SelectUserByID(ctx, arg.ID)
+		user, err = s.querier.SelectUserByID(ctx, arg.ID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, errors2.ErrNotFound
 			}
 		}
 	} else if arg.Login != "" {
-		user, err = s.db.SelectUserByLogin(ctx, sql.NullString{String: arg.Login, Valid: true})
+		user, err = s.querier.SelectUserByLogin(ctx, sql.NullString{String: arg.Login, Valid: true})
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, errors2.ErrNotFound
@@ -225,7 +237,7 @@ func (s *pgStorage) SelectUser(ctx context.Context, arg SelectUserParams) (*enti
 }
 
 func (s *pgStorage) CreateFlashcard(ctx context.Context, args CreateFlashcardParams) error {
-	_, err := s.db.CreateFlashcard(ctx, postgresql.CreateFlashcardParams{
+	_, err := s.querier.CreateFlashcard(ctx, postgresql.CreateFlashcardParams{
 		ID:      args.ID,
 		Word:    sql.NullString{String: args.Word, Valid: true},
 		Meaning: sql.NullString{String: args.Meaning, Valid: true},
@@ -240,7 +252,7 @@ func (s *pgStorage) UpdateFlashcard(ctx context.Context, arg UpdateFlashcardPara
 		return fmt.Errorf("error id required")
 	}
 
-	currentFlashcardState, err := s.db.SelectFlashcardByID(ctx, arg.ID)
+	currentFlashcardState, err := s.querier.SelectFlashcardByID(ctx, arg.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return errors2.ErrNotFound
@@ -267,7 +279,7 @@ func (s *pgStorage) UpdateFlashcard(ctx context.Context, arg UpdateFlashcardPara
 		return nil
 	}
 
-	err = s.db.UpdateFlashcard(ctx, *newVals)
+	err = s.querier.UpdateFlashcard(ctx, *newVals)
 	if err != nil {
 		return fmt.Errorf("error updating flashcard: %w", handleError(err))
 	}
@@ -279,7 +291,7 @@ func (s *pgStorage) DeleteFlashcard(ctx context.Context, cardID uuid.UUID) error
 		return fmt.Errorf("error flashcard uuid is required")
 	}
 
-	err := s.db.DeleteFlashcard(ctx, cardID)
+	err := s.querier.DeleteFlashcard(ctx, cardID)
 	if err != nil {
 		return fmt.Errorf("error delete flashcard: %w", err)
 	}
@@ -290,7 +302,7 @@ func (s *pgStorage) DeleteFlashcard(ctx context.Context, cardID uuid.UUID) error
 func (s *pgStorage) SelectFlashcard(ctx context.Context, arg SelectFlashcardParams) ([]*entities.Flashcard, error) {
 	// switch {
 	// case arg.ID != uuid.Nil:
-	// 	card, err := s.db.SelectFlashcardByID(ctx, arg.ID)
+	// 	card, err := s.querier.SelectFlashcardByID(ctx, arg.ID)
 	// 	if err != nil {
 	// 		return nil, err
 	// 	}
@@ -301,7 +313,7 @@ func (s *pgStorage) SelectFlashcard(ctx context.Context, arg SelectFlashcardPara
 }
 
 func (s *pgStorage) CreateDeck(ctx context.Context, arg CreateDeckParams) error {
-	_, err := s.db.CreateDeck(ctx, postgresql.CreateDeckParams{
+	_, err := s.querier.CreateDeck(ctx, postgresql.CreateDeckParams{
 		ID:    arg.ID,
 		Owner: uuid.NullUUID{UUID: arg.Owner, Valid: true},
 		Name:  sql.NullString{String: arg.Name, Valid: true},
@@ -321,7 +333,7 @@ func (s *pgStorage) SelectDeck(ctx context.Context, arg SelectDeckParams) (*enti
 }
 
 func (s *pgStorage) AddToDeck(ctx context.Context, arg AddToDeckParams) error {
-	err := s.db.AddToDeck(ctx, postgresql.AddToDeckParams{
+	err := s.querier.AddToDeck(ctx, postgresql.AddToDeckParams{
 		DeckID:      uuid.NullUUID{UUID: arg.DeckID, Valid: true},
 		FlashcardID: uuid.NullUUID{UUID: arg.FlashcardID, Valid: true},
 	})

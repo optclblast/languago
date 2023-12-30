@@ -6,18 +6,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"languago/pkg/models"
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/google/uuid"
 )
-
-type DBTX interface {
-	sq.Runner
-	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
-	PrepareContext(context.Context, string) (*sql.Stmt, error)
-	QueryContext(context.Context, string, ...interface{}) (*sql.Rows, error)
-	QueryRowContext(context.Context, string, ...interface{}) *sql.Row
-}
 
 type databaseController struct {
 	conn *sql.DB
@@ -151,12 +144,6 @@ func (c *databaseController) DeleteUser(ctx context.Context, id uuid.UUID) error
 	return err
 }
 
-// const editDeckProps = `-- name: EditDeckProps :exec
-// UPDATE decks SET
-//     name = $1
-//     WHERE id = $2
-// `
-
 type EditDeckPropsParams struct {
 	Name string
 	ID   uuid.UUID
@@ -172,17 +159,16 @@ func (c *databaseController) EditDeckProps(ctx context.Context, arg EditDeckProp
 	return err
 }
 
-// const selectDeck = `-- name: SelectDeck :one
-// SELECT id, name, owner FROM decks
-//     WHERE id = $1
-// `
+const selectDeck = `-- name: SelectDeck :one
+SELECT id, name, owner FROM decks
+    WHERE id = $1
+`
 
-// func (c *databaseController) SelectDeck(ctx context.Context, id uuid.UUID) (Deck, error) {
-// 	row := c.conn.QueryRowContext(ctx, selectDeck, id)
-// 	var i Deck
-// 	err := row.Scan(&i.ID, &i.Name, &i.Owner)
-// 	return i, err
-// }
+func (c *databaseController) SelectDeck(ctx context.Context, id uuid.UUID) (*models.Deck, error) {
+	//selectDeck := s
+
+	return nil, nil
+}
 
 // const selectDecksByName = `-- name: SelectDecksByName :many
 // SELECT id, name, owner FROM decks

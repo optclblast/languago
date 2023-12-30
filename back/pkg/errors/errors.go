@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
+	"github.com/sirupsen/logrus"
 )
 
 // TODO errors
@@ -67,10 +67,10 @@ type ErrorsPersenter interface {
 }
 
 type errorPresenter struct {
-	log zerolog.Logger
+	log *logrus.Logger
 }
 
-func NewErrorPresenter(log zerolog.Logger) ErrorsPersenter {
+func NewErrorPresenter(log *logrus.Logger) ErrorsPersenter {
 	return &errorPresenter{log: log}
 }
 

@@ -25,16 +25,17 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
+	"github.com/sirupsen/logrus"
 )
 
 type (
 	API struct {
 		*chi.Mux
 
-		ID   uuid.UUID
-		repo repository.DatabaseInteractor
-		log  zerolog.Logger
+		ID      uuid.UUID
+		version string
+		repo    repository.DatabaseInteractor
+		log     *logrus.Logger
 		//auth                 auth.Authorizer
 		errorsPresenter      errors2.ErrorsPersenter
 		usersController      users.UsersController
@@ -42,7 +43,7 @@ type (
 	}
 )
 
-func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInteractor) *API {
+func NewAPI(cfg *config.Config, log *logrus.Logger, interactor repository.DatabaseInteractor) *API {
 	logger := logger.ProvideLogger(cfg)
 	errorsPresenter := errors2.NewErrorPresenter(logger)
 
@@ -91,8 +92,12 @@ func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInter
 	// }))
 
 	router.Use(chimw.RequestID)
-	router.Use(mw.LoggingMiddleware)
+	//router.Use(mw.LoggingMiddleware)
+	router.Use(chimw.Logger)
 	router.Use(mw.Recovery)
+
+	techRouter := chi.NewRouter()
+	techRouter.Get("/health", api.healthcheck)
 
 	generalRouter := chi.NewRouter()
 
@@ -108,6 +113,7 @@ func NewAPI(cfg config.AbstractLoggerConfig, interactor repository.DatabaseInter
 	authRouter.Post("/signup", api.signUpHandler)
 	authRouter.Post("/signin", api.signInHandler)
 
+	router.Mount("/s", techRouter)
 	router.Mount("/auth", authRouter)
 	router.Mount("/", generalRouter)
 
@@ -127,6 +133,32 @@ const (
 	// Adjective = 2
 	// Any       = 3
 )
+
+func (a *API) healthcheck(w http.ResponseWriter, r *http.Request) {
+	var status string
+
+	err := a.repo.Database().PingDB()
+	if err != nil {
+		status = "DB-ISSUE"
+	} else {
+		status = "OK"
+	}
+
+	resp := &rest.HealthcheckResponse{
+		Version: a.version,
+		Name:    "flashcard",
+		Status:  status,
+	}
+
+	data, err := json.Marshal(resp)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(data)
+}
 
 func (a *API) signUpHandler(w http.ResponseWriter, r *http.Request) {
 	req := new(rest.SignUpRequest)
@@ -152,7 +184,7 @@ func (a *API) signUpHandler(w http.ResponseWriter, r *http.Request) {
 
 	err = a.usersController.CreateUser(ctx, req)
 	if err != nil {
-		a.log.Error().Msgf("error create user: %s", err.Error())
+		a.log.Errorf("error create user: %s", err.Error())
 
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -160,7 +192,7 @@ func (a *API) signUpHandler(w http.ResponseWriter, r *http.Request) {
 
 	token, err := ctxtools.Token(ctx)
 	if err != nil {
-		a.log.Error().Msgf("error fetch token from context: %s", err.Error())
+		a.log.Errorf("error fetch token from context: %s", err.Error())
 
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -168,7 +200,7 @@ func (a *API) signUpHandler(w http.ResponseWriter, r *http.Request) {
 
 	userID, err := ctxtools.UserID(ctx)
 	if err != nil {
-		a.log.Error().Msgf("error fetch user id from context: %s", err.Error())
+		a.log.Errorf("error fetch user id from context: %s", err.Error())
 
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -181,7 +213,7 @@ func (a *API) signUpHandler(w http.ResponseWriter, r *http.Request) {
 
 	out, err := json.Marshal(resp)
 	if err != nil {
-		a.log.Error().Msgf("error marshal response: %s", err.Error())
+		a.log.Errorf("error marshal response: %s", err.Error())
 
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -220,7 +252,7 @@ func (a *API) signInHandler(w http.ResponseWriter, r *http.Request) {
 
 	var user *entities.User = new(entities.User)
 
-	err = a.repo.Database().WithTransaction(ctx, nil, func(tx *sql.Tx) error {
+	err = a.repo.Database().WithTransaction(ctx, func(ctx context.Context) error {
 		user, err = a.repo.Database().SelectUser(ctx, repository.SelectUserParams{
 			Login: req.Login,
 		})
@@ -237,7 +269,7 @@ func (a *API) signInHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.log.Info().Any("user: ", user)
+	a.log.Info("user: ", user)
 
 	// todo password validation
 

@@ -7,7 +7,7 @@ import (
 	errors2 "languago/pkg/errors"
 
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
+	"github.com/sirupsen/logrus"
 )
 
 type (
@@ -15,9 +15,10 @@ type (
 		ID() uuid.UUID
 		Run()
 		Stop(ctx context.Context)
-		SetConfig(cfg config.AbstractNodeConfig)
+		SetConfig(cfg *config.Config)
 		ErrorsPresenter() errors2.ErrorsPersenter
-		Log() *zerolog.Logger
+		Log() *logrus.Logger
+		Version() string
 	}
 
 	Service interface {
@@ -26,26 +27,24 @@ type (
 
 	node struct {
 		id       uuid.UUID
-		config   config.AbstractNodeConfig
+		config   *config.Config
 		services Services
-		log      *zerolog.Logger
+		log      *logrus.Logger
+		version  string
 
 		errorsPersenter errors2.ErrorsPersenter
 		errorCh         chan error
 		errorsObserver  errors2.ErrorsObserver
-
-		// deprecated
-		logger logger.Logger
 	}
 
 	StopFunc func(n Node) error
 	Services []Service
 
 	NewNodeParams struct {
-		//StopFuncs       []StopFunc
-		Log    zerolog.Logger
-		Logger logger.Logger
-		Config config.AbstractConfig
+		Version string
+		Log     *logrus.Logger
+		Logger  logger.Logger
+		Config  *config.Config
 		//Closer          closer.Closer
 		ErrorsPresenter errors2.ErrorsPersenter
 	}
@@ -57,17 +56,15 @@ func NewNode(args *NewNodeParams) Node {
 	}
 
 	var services Services = make(Services, 0)
-	for _, serviceCfg := range args.Config.GetNodeConfig().GetServicesCfg() {
-		service := NewService(args.Config, serviceCfg.GetHTTPAddress())
-		services = append(services, service)
-	}
+	service := NewService(args.Config, args.Config.Node.FlashcardAPI.Address, args.Log)
+	services = append(services, service)
 
 	nodeId := uuid.New()
 
 	node := &node{
 		id:              nodeId,
-		logger:          args.Logger,
-		log:             &args.Log,
+		version:         args.Version,
+		log:             args.Log,
 		errorsPersenter: args.ErrorsPresenter,
 		services:        services,
 		//closer:          args.Closer,
@@ -83,7 +80,7 @@ func NewNode(args *NewNodeParams) Node {
 }
 
 func (n *node) Run() {
-	n.log.Info().Msgf("starting the node: node_id: %v", n.ID())
+	n.log.Infof("starting the node: node_id: %v version: %s", n.ID(), n.Version())
 
 	for _, s := range n.services {
 		s.Start(n.errorCh)
@@ -94,11 +91,15 @@ func (n *node) Stop(ctx context.Context) {
 	// todo
 }
 
+func (n *node) Version() string {
+	return n.version
+}
+
 func (n *node) ID() uuid.UUID { return n.id }
 
-func (n *node) SetConfig(cfg config.AbstractNodeConfig) { n.config = cfg }
+func (n *node) SetConfig(cfg *config.Config) { n.config = cfg }
 
-func (n *node) Log() *zerolog.Logger {
+func (n *node) Log() *logrus.Logger {
 	return n.log
 }
 

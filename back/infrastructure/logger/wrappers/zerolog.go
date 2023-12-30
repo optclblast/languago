@@ -13,7 +13,7 @@ type zerologWrapper struct {
 }
 
 func (l *zerologWrapper) Write(args ...any) {
-	//l.log.Trace().Msgf(format, args...)
+	//l.log.Trace(format, args...)
 }
 
 func (l *zerologWrapper) Warn(args ...any) {
@@ -50,40 +50,40 @@ func (l *zerologWrapper) Trace(args ...any) {
 
 // Formatted
 
-func (l *zerologWrapper) Warnf(format string, args ...any) {
-	l.log.Warn().Msgf(format, args...)
-}
+// func (l *zerologWrapper) Warnf(format string, args ...any) {
+// 	l.log.Warn(format, args...)
+// }
 
-func (l *zerologWrapper) Debugf(format string, args ...any) {
-	if !l.dbgMode {
-		return
-	}
-	l.log.Debug().Msgf(format, args...)
-}
+// func (l *zerologWrapper) Debugf(format string, args ...any) {
+// 	if !l.dbgMode {
+// 		return
+// 	}
+// 	l.log.Debug(format, args...)
+// }
 
-func (l *zerologWrapper) Errorf(format string, args ...any) {
-	l.log.Error().Msgf(format, args...)
-}
+// func (l *zerologWrapper) Errorf(format string, args ...any) {
+// 	l.log.Error(format, args...)
+// }
 
-func (l *zerologWrapper) Infof(format string, args ...any) {
-	l.log.Info().Msgf(format, args...)
-}
+// func (l *zerologWrapper) Infof(format string, args ...any) {
+// 	l.log.Info(format, args...)
+// }
 
-func (l *zerologWrapper) Logf(format string, args ...any) {
-	//l.log.Log(l.lvl, args) // TODO level mapper
-	l.Infof(format, args...)
-}
+// func (l *zerologWrapper) Logf(format string, args ...any) {
+// 	//l.log.Log(l.lvl, args) // TODO level mapper
+// 	l.Infof(format, args...)
+// }
 
-func (l *zerologWrapper) Panicf(format string, args ...any) {
-	l.log.Panic().Msgf(format, args...)
-}
+// func (l *zerologWrapper) Panicf(format string, args ...any) {
+// 	l.log.Panic(format, args...)
+// }
 
-func (l *zerologWrapper) Tracef(format string, args ...any) {
-	l.log.Trace().Msgf(format, args...)
-}
+// func (l *zerologWrapper) Tracef(format string, args ...any) {
+// 	l.log.Trace(format, args...)
+// }
 
 func (l *zerologWrapper) Writef(format string, args ...any) {
-	//l.log.Trace().Msgf(format, args...)
+	//l.log.Trace(format, args...)
 }
 
 func messageBuilder(args ...any) func() string {

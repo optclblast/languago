@@ -9,59 +9,69 @@ networks:
     external: true
 
 services:
-  caddy:
-    image: lucaslorentz/caddy-docker-proxy:ci-alpine
-    ports:
-      - 80:80
-      - 443:443
-    environment:
-      - CADDY_INGRESS_NETWORKS=caddy
-    networks:
-      - caddy
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - caddy_data:/data
-    restart: unless-stopped
+  # caddy:
+  #   image: lucaslorentz/caddy-docker-proxy:ci-alpine
+  #   ports:
+  #     - 80:80
+  #     - 443:443
+  #   environment:
+  #     - CADDY_INGRESS_NETWORKS=caddy
+  #   networks:
+  #     - caddy
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #     - caddy_data:/data
+  #   restart: unless-stopped
 
-  backend:
-    build:
-      context: ./back
-      target: languago_builder
-    hostname: backend
+  #  backend:
+  #    build:
+  #      context: ./back
+  #      target: languago_builder
+  #    networks:
+  #      - languago
+  #      - caddy
+  #    labels:
+  #      caddy: http://languago:3300
+  #      caddy.reverse_proxy: "{{upstreams 80}}"
+  #      depends_on:
+  #         database:
+  #         condition: service_started
+
+  consul:
+    image: consul:1.15.4
+    restart: always 
     networks:
       - languago
-      - caddy
-    labels:
-      caddy: http://languago:3300
-      caddy.reverse_proxy: "{{upstreams 80}}"
-    # depends_on:
-    #   database:
-    #     condition: service_started
+    volumes:
+      - consul_data:/consul/data
+    command: agent -server -ui -node=server-1 -bootstrap-expect=1 -client=0.0.0.0  -dev -bind=127.0.0.1
+    ports:
+      - "8500:8500"
 
-  # database:
-  #   image: postgres:15
-  #   container_name: languago_pg
-  #   hostname: languago_db
-  #   restart: always
-  #   environment:
-  #     - PGUSER=postgres
-  #     - POSTGRES_PASSWORD=postgres
-  #     - POSTGRES_DB=postgres
-  #   volumes:
-  #     - ./back/cfg/schemas/postgresql/pg.sql:/docker-entrypoint-initdb.d/init.sql
-  #     - pg_languago:/var/lib/postgresql/data
-  #   ports:
-  #     - 5432:5432
-  #   networks:
-  #     - languago
-  #   healthcheck:
-  #     test: [ "CMD", "-U", "postgres", "pg_isready" ]
-  #     interval: 5s
-  #     timeout: 5s
-  #     retries: 10
-  #     start_period: 10s
+  database:
+    image: postgres:15
+    restart: always
+    environment:
+      - POSTGRES_USER=languago
+      - POSTGRES_PASSWORD=languago
+      - POSTGRES_DB=languago
+    volumes:
+      - ./back/cfg/schemas/postgresql/pg.sql:/docker-entrypoint-initdb.d/init.sql
+      - pg_languago:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
+    networks:
+      - languago
+    healthcheck:
+      test: [ "CMD", "-U", "languago", "pg_isready" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
 volumes:
   pg_languago:
   caddy_data: {}
   caddy_config:
+  consul_data:
+    driver: local

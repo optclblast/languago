@@ -12,7 +12,7 @@ type logrusWrapper struct {
 }
 
 func (l *logrusWrapper) Write(args ...any) {
-	//l.log.Trace().Msgf(format, args...)
+	//l.log.Trace(format, args...)
 }
 
 func (l *logrusWrapper) Warn(args ...any) {
@@ -82,7 +82,7 @@ func (l *logrusWrapper) Tracef(format string, args ...any) {
 }
 
 func (l *logrusWrapper) Writef(format string, args ...any) {
-	//l.log.Trace().Msgf(format, args...)
+	//l.log.Trace(format, args...)
 }
 
 func (l *logrusWrapper) do() {

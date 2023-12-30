@@ -7,36 +7,36 @@ import (
 	"languago/infrastructure/repository"
 	"languago/interface/api"
 
-	errors2 "languago/pkg/errors"
+	//errors2 "languago/pkg/errors"
 	"net/http"
 
 	_ "github.com/lib/pq"
-	"github.com/rs/zerolog"
+	"github.com/sirupsen/logrus"
 )
 
 type (
 	flashcardService struct {
-		API             *api.API
-		address         string
-		log             zerolog.Logger
-		errorsPresenter errors2.ErrorsPersenter
+		API     *api.API
+		address string
+		log     *logrus.Logger
+		//errorsPresenter errors2.ErrorsPersenter
 	}
 )
 
-func NewService(cfg config.AbstractConfig, address string) Service {
-	dbInteractor, err := repository.NewDatabaseInteractor(cfg.GetDatabaseConfig())
+func NewService(cfg *config.Config, address string, log *logrus.Logger) Service {
+	dbInteractor, err := repository.NewDatabaseInteractor(cfg.Node.Database)
 	if err != nil {
 		panic("can't get database interactor! " + err.Error())
 	}
 	return &flashcardService{
-		API:     api.NewAPI(cfg.GetLoggerConfig(), dbInteractor),
+		API:     api.NewAPI(cfg, log, dbInteractor),
 		address: address,
-		log:     logger.ProvideLogger(cfg.GetLoggerConfig()),
+		log:     logger.ProvideLogger(cfg),
 	}
 }
 
 func (s *flashcardService) Start(e chan error) {
-	s.log.Info().Msgf("Starting server at %v", s.address)
+	s.log.Infof("Starting server at %v", s.address)
 	go s.listen(e)
 }
 

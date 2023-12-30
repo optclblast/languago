@@ -2,9 +2,12 @@ package logger
 
 import (
 	"fmt"
+	"io"
+	"languago/infrastructure/config"
 	"os"
 
 	"github.com/rs/zerolog"
+	"github.com/sirupsen/logrus"
 )
 
 type (
@@ -46,18 +49,6 @@ type (
 		Panic(args ...any)
 	}
 
-	logger struct {
-		lvl       Level // atomic
-		tag       string
-		b         *Backend
-		writeChan chan<- logEntry
-	}
-
-	logEntry struct {
-		log   []byte
-		level Level
-	}
-
 	LogFields map[string]interface{}
 )
 
@@ -69,7 +60,21 @@ const (
 	EnvParam_PRODUCTION  EnvParam = "production"
 )
 
-func ProvideLogger(cfg abstractLoggerConfig) zerolog.Logger {
+func ProvideLogger(cfg *config.Config) *logrus.Logger {
+	llog := logrus.New()
+	llog.Formatter = &logrus.TextFormatter{
+		ForceColors:      true,
+		QuoteEmptyFields: true,
+		FullTimestamp:    true,
+	}
+	llog.SetLevel(logrus.DebugLevel)
+
+	logrus.SetOutput(io.MultiWriter(os.Stdout))
+
+	return llog
+}
+
+func ProvideZerologLogger(cfg abstractLoggerConfig) zerolog.Logger {
 	switch cfg.GetEnv() {
 	case EnvParam_LOCAL:
 		consoleWriter := zerolog.ConsoleWriter{Out: os.Stdout}

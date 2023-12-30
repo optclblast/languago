@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"languago/infrastructure/config"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -42,59 +43,48 @@ type (
 	}
 )
 
-func NewDatabaseInteractor(cfg abstractDatabaseConfig) (DatabaseInteractor, error) {
-	if cfg.IsMock() {
-		mock := &databaseInteractor{
-			DB: _newMockStorage(),
-		}
-		return mock, nil
-	}
-
+func NewDatabaseInteractor(cfg *config.DatabaseConfig) (DatabaseInteractor, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("error database config required")
 	}
-	cred := cfg.GetCredentials()
 
-	database, err := databaseConnection(cred)
+	database, err := databaseConnection(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("error initializing database interactor: %w", err)
 	}
 
 	var interactor databaseInteractor
-	driver := cred.GetDriver()
+	driver := cfg.DatabaseDriver
 	if driver == "postgres" {
 		interactor.DB = newPGStorage(database)
-	} else if driver == "mysql" {
-		//interactor.DB = newMySQLStorage(database)
 	} else {
 		return nil, fmt.Errorf("error invalid driver %s", driver)
 	}
 
-	interactor.DBCred = cred
 	return &interactor, nil
 }
 
 // TODO
-func databaseConnection(c DBCredentials) (*sql.DB, error) {
+func databaseConnection(c *config.DatabaseConfig) (*sql.DB, error) {
 	var (
 		connStr string
 		db      *sql.DB
 		err     error
 	)
-	switch c.GetDriver() {
+	switch c.DatabaseDriver {
 	case "postgres":
 		connStr = fmt.Sprintf("postgresql://%s:%s@%s/%s?sslmode=disable",
-			c.GetUser(), c.GetSecret(), c.GetAddress(), c.GetDBName())
+			c.DatabaseUser, c.DatabaseSecret, c.DatabaseAddress, c.DatabaseName)
 
-		db, err = sql.Open(c.GetDriver(), connStr)
+		db, err = sql.Open(c.DatabaseDriver, connStr)
 		if err != nil {
 			return nil, fmt.Errorf("error connecting to database: %w", handleError(err))
 		}
 	case "mysql":
 		connStr = fmt.Sprintf("mysql://%s:%s@%s/%s",
-			c.GetUser(), c.GetSecret(), c.GetAddress(), c.GetDBName())
+			c.DatabaseUser, c.DatabaseSecret, c.DatabaseAddress, c.DatabaseName)
 
-		db, err = sql.Open(c.GetDriver(), connStr)
+		db, err = sql.Open(c.DatabaseDriver, connStr)
 		if err != nil {
 			return nil, fmt.Errorf("error connecting to database: %w", handleError(err))
 		}
